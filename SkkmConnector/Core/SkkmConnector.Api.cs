@@ -151,7 +151,7 @@ public sealed partial class SkkmConnector
         CorrectionTypes correctionType,
         string correctionDescription,
         DateTime correctionDate,
-        string correctionNumber = "")
+        string correctionNumber = "0")
     {
         Clear();
         PaymentType = paymentType;
@@ -171,7 +171,7 @@ public sealed partial class SkkmConnector
         CorrectionTypes correctionType,
         string correctionDescription,
         DateTime correctionDate,
-        string correctionNumber = "")
+        string correctionNumber = "0")
     {
         Clear();
         CashierName = cashierName;

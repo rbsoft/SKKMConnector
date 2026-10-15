@@ -72,7 +72,10 @@ public sealed partial class SkkmConnector
             fiscalCount++;
             if (string.IsNullOrWhiteSpace(line.Name))
                 return FailValidation($"Не заполнено наименование товара в позиции №{number} (FiscalLine.Name).");
-            if (line.Quantity <= 0)
+            if (line.Quantity == 0)
+                // Нулевое количество автоматически заменяется на единицу.
+                line.Quantity = 1;
+            if (line.Quantity < 0)
                 return FailValidation($"Количество товара в позиции №{number} должно быть больше нуля (FiscalLine.Quantity).");
             if (line.SignMethodCalculation == null)
                 return FailValidation($"Не указан признак способа расчёта в позиции №{number} (FiscalLine.SignMethodCalculaion)");

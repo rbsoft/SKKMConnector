@@ -355,6 +355,29 @@ public sealed partial class SkkmConnector
     }
 
     /// <summary>
+    /// Добавление безналичной оплаты.
+    /// Для нескольких безналичных оплат вызвать несколько раз (каждая попадает в список
+    /// ElectronicPayments). Для одной оплаты можно также использовать плоские поля
+    /// ElectronicPaymentAmount / Method / Identifiers / AdditionalInformation.
+    /// </summary>
+    public ElectronicPayment AddElectronicPayment(
+        decimal amount,
+        ElectronicPaymentMethod? paymentMethod = null,
+        string? identifiers = null,
+        string? additionalInformation = null)
+    {
+        var payment = new ElectronicPayment
+        {
+            Amount = amount,
+            PaymentMethod = paymentMethod,
+            Identifiers = identifiers,
+            AdditionalInformation = additionalInformation,
+        };
+        ElectronicPayments.Add(payment);
+        return payment;
+    }
+
+    /// <summary>
     /// Добавление текстовой строки в чек или печатный шаблон.
     /// </summary>
     public TextLine AddText(

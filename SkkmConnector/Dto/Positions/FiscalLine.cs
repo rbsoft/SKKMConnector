@@ -66,11 +66,6 @@ public sealed class FiscalLine : Position
     public SignCalculationObject? SignCalculationObject { get; set; }
 
     /// <summary>
-    /// Единица измерения предмета расчета
-    /// </summary>
-    public string? MeasurementUnit { get; set; }
-
-    /// <summary>
     /// Мера количества предмета расчёта.
     /// </summary>
     public MeasureOfQuantity? MeasureOfQuantity { get; set; }
