@@ -134,6 +134,12 @@ public sealed class CheckItem
     public ImcParams? ImcParams { get; set; }
 
     /// <summary>
+    /// Нефискальная строка чека (текст, разделитель, штрихкод, картинка). У товара — null.
+    /// </summary>
+    [JsonPropertyName("PrintLine")]
+    public PrintFormLine? PrintLine { get; set; }
+
+    /// <summary>
     /// Код маркировки.
     /// </summary>
     [JsonIgnore]

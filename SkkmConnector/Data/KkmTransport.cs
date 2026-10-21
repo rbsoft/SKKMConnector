@@ -9,10 +9,10 @@ namespace RBSoftSkkm.Internal
     /// </summary>
     internal sealed class KkmTransport : IDisposable
     {
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        /// <summary>
+        /// Разбор ответа по контрактам: имена полей как на сервере, с учётом регистра.
+        /// </summary>
+        private static readonly JsonSerializerOptions JsonOptions = new();
 
         private static readonly JsonSerializerOptions BodyJsonOptions = new()
         {
@@ -34,18 +34,6 @@ namespace RBSoftSkkm.Internal
         public string? TerminalId { get; set; }
         public TimeSpan Timeout { get; set; } = DefaultTimeout;
 
-        internal Task<ResponseResult<JsonElement>> Get(string path, CancellationToken cancellationToken = default)
-            => SendAsync(HttpMethod.Get, path, body: null, cancellationToken);
-
-        internal Task<ResponseResult<JsonElement>> Post(string path, object? body = null, CancellationToken cancellationToken = default)
-            => SendAsync(HttpMethod.Post, path, body, cancellationToken: cancellationToken);
-
-        internal Task<ResponseResult<JsonElement>> Put(string path, object? body = null, CancellationToken cancellationToken = default)
-            => SendAsync(HttpMethod.Put, path, body, cancellationToken: cancellationToken);
-
-        internal Task<ResponseResult<JsonElement>> Delete(string path, CancellationToken cancellationToken = default)
-            => SendAsync(HttpMethod.Delete, path, body: null, cancellationToken: cancellationToken);
-
         public void Dispose()
         {
             if (_disposed)
@@ -54,16 +42,19 @@ namespace RBSoftSkkm.Internal
             _http.Dispose();
         }
 
-        private async Task<ResponseResult<JsonElement>> SendAsync(
+        /// <summary>
+        /// Запрос к серверу ККМ: <c>Result</c> ответа разбирается в контракт <typeparamref name="T"/>.
+        /// </summary>
+        internal async Task<ResponseResult<T>> Send<T>(
             HttpMethod method,
             string relativeUrl,
-            object? body,
+            object? body = null,
             CancellationToken cancellationToken = default)
         {
             if (_disposed)
-                return FailResult(-1, "Коннектор закрыт. Создайте новый SkkmConnector.");
+                return FailResult<T>(-1, "Коннектор закрыт. Создайте новый SkkmConnector.");
             if (string.IsNullOrWhiteSpace(Host) || Port is < 1 or > 65535)
-                return FailResult(-1, "Укажите Host и Port сервера ККМ.");
+                return FailResult<T>(-1, "Укажите Host и Port сервера ККМ.");
 
             using var request = new HttpRequestMessage(method, RequestUri(relativeUrl));
             AddApiKey(request);
@@ -85,31 +76,41 @@ namespace RBSoftSkkm.Internal
                 var statusCode = (int)response.StatusCode;
 
                 if (string.IsNullOrWhiteSpace(responseBody))
-                    return FailResult(statusCode, DescribeHttpError(statusCode, response.StatusCode.ToString()));
+                    return FailResult<T>(statusCode, DescribeHttpError(statusCode, response.StatusCode.ToString()));
 
                 try
                 {
-                    var parsed = JsonSerializer.Deserialize<ResponseResult<JsonElement>>(responseBody, JsonOptions);
+                    var parsed = JsonSerializer.Deserialize<ResponseResult<T>>(responseBody, JsonOptions);
                     if (parsed != null)
                         return parsed;
                 }
                 catch (JsonException)
                 {
+                    // Result не по контракту — статус сервера отдаём как есть, без Result.
+                    try
+                    {
+                        var status = JsonSerializer.Deserialize<ResponseResult<JsonElement>>(responseBody, JsonOptions);
+                        if (status != null)
+                            return new ResponseResult<T> { Success = status.Success, Code = status.Code, Description = status.Description };
+                    }
+                    catch (JsonException)
+                    {
+                    }
                 }
 
-                return FailResult(statusCode, DescribeHttpError(statusCode, "некорректный ответ сервера"));
+                return FailResult<T>(statusCode, DescribeHttpError(statusCode, "некорректный ответ сервера"));
             }
             catch (HttpRequestException ex)
             {
-                return FailResult(-1, $"Ошибка соединения: {ex.Message}");
+                return FailResult<T>(-1, $"Ошибка соединения: {ex.Message}");
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                return FailResult(-3, "Запрос отменён");
+                return FailResult<T>(-3, "Запрос отменён");
             }
             catch (OperationCanceledException)
             {
-                return FailResult(-2, "Превышено время ожидания ответа сервера");
+                return FailResult<T>(-2, "Превышено время ожидания ответа сервера");
             }
         }
 
@@ -143,7 +144,7 @@ namespace RBSoftSkkm.Internal
             };
         }
 
-        private static ResponseResult<JsonElement> FailResult(int code, string description)
+        private static ResponseResult<T> FailResult<T>(int code, string description)
             => new() { Success = false, Code = code, Description = description };
 
         private static string DescribeHttpError(int statusCode, string fallback)

@@ -1,5 +1,4 @@
 using RBSoftSkkm.Internal;
-using System.Text.Json;
 
 namespace RBSoftSkkm;
 
@@ -105,7 +104,6 @@ public sealed partial class SkkmConnector
         Ok = false;
         ErrorCode = 0;
         ErrorDescription = "";
-        Result = default;
 
         // Сброс всех данных ответа
         ResetResponse();
@@ -239,15 +237,11 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> Ping()
     {
-        await Get("ping");
-        if (Result.ValueKind == JsonValueKind.Object)
+        return await Call<PingResult>(HttpMethod.Get, "ping", null, ping =>
         {
-            if (Result.TryGetProperty("product", out var product))
-                ServerProduct = product.GetString() ?? "";
-            if (Result.TryGetProperty("version", out var version))
-                ServerVersion = version.GetString() ?? "";
-        }
-        return Ok;
+            ServerProduct = ping.Product ?? "";
+            ServerVersion = ping.Version ?? "";
+        });
     }
 
     /// <summary>
@@ -255,9 +249,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetDeviceList()
     {
-        await Get("kkt/list");
-        Devices = ReadResult<DeviceListResponse[]>() ?? [];
-        return Ok;
+        return await Call<DeviceListResponse[]>(HttpMethod.Get, "kkt/list", null, devices => Devices = devices);
     }
 
     /// <summary>
@@ -265,15 +257,14 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetKktInfo()
     {
-        await Get($"kkt?{DeviceQuery}");
-        Kkt = ReadResult<DataKkt>();
-        if (Kkt == null)
-            return Ok;
-        ServerVersion = Kkt.ServerVersion ?? "";
-        ApplyStatus(Kkt.Status);
-        ApplyDeviceInfo(Kkt.Device);
-        ApplyFnInfo(Kkt.Fn);
-        return Ok;
+        return await Call<DataKkt>(HttpMethod.Get, $"kkt?{DeviceQuery}", null, kkt =>
+        {
+            Kkt = kkt;
+            ServerVersion = kkt.ServerVersion ?? "";
+            ApplyStatus(kkt.Status);
+            ApplyDeviceInfo(kkt.Device);
+            ApplyFnInfo(kkt.Fn);
+        });
     }
 
     /// <summary>
@@ -281,9 +272,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetStatus()
     {
-        await Get($"kkt/status?{DeviceQuery}");
-        ApplyStatus(ReadResult<KktStatus>());
-        return Ok;
+        return await Call<KktStatus>(HttpMethod.Get, $"kkt/status?{DeviceQuery}", null, ApplyStatus);
     }
 
     /// <summary>
@@ -291,15 +280,14 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetShiftStatus()
     {
-        await Get($"kkt/shift/status?{DeviceQuery}");
-        ShiftStatus = ReadResult<ResponseCurrentStatus>();
-        if (ShiftStatus == null)
-            return Ok;
-        ShiftNumber = ShiftStatus.ShiftNumber;
-        CheckNumber = ShiftStatus.CheckNumber;
-        CurrentShiftState = ShiftStatus.ShiftState;
-        _backlog = ShiftStatus.Backlog;
-        return Ok;
+        return await Call<ResponseCurrentStatus>(HttpMethod.Get, $"kkt/shift/status?{DeviceQuery}", null, status =>
+        {
+            ShiftStatus = status;
+            ShiftNumber = status.ShiftNumber;
+            CheckNumber = status.CheckNumber;
+            CurrentShiftState = status.ShiftState;
+            _backlog = status.Backlog;
+        });
     }
 
     /// <summary>
@@ -307,8 +295,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> OpenShift()
     {
-        await Post("shift/open", CheckBase());
-        return Ok;
+        return await Call<OpenShiftResult>(HttpMethod.Post, "shift/open", CheckBase(), ApplyOpenShiftResult);
     }
 
     /// <summary>
@@ -316,8 +303,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> CloseShift()
     {
-        await Post("shift/z", CheckBase());
-        return Ok;
+        return await Call<ReportResult>(HttpMethod.Post, "shift/z", CheckBase(), ApplyReportResult);
     }
 
     /// <summary>
@@ -325,8 +311,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> ReportX()
     {
-        await Post("shift/x", CheckBase());
-        return Ok;
+        return await Call<ReportResult>(HttpMethod.Post, "shift/x", CheckBase(), ApplyReportResult);
     }
 
     /// <summary>
@@ -334,8 +319,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> ReportSettlement()
     {
-        await Post("report/settlement", CheckBase());
-        return Ok;
+        return await Call<ReportResult>(HttpMethod.Post, "report/settlement", CheckBase(), ApplyReportResult);
     }
 
     /// <summary>
@@ -351,7 +335,7 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Возвращает Z-отчёт по идентификатору документа (docId)
     /// </summary>
-    public async Task<bool> GetReportZ(string documentId)
+    public async Task<bool> GetCloseShift(string documentId)
     {
         DocumentId = documentId;
         await GetDocumentById("shift/z");
@@ -383,10 +367,13 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetOverAll()
     {
-        await Get($"kkt/counters/overall?{DeviceQuery}");
-        OverallTotals = ReadResult<OverallTotals>();
-        NonZeroSum = OverallTotals?.Counters?.Sales?.Sum ?? 0;
-        return Ok;
+        return await Call<OverallTotals>(HttpMethod.Get, $"kkt/counters/overall?{DeviceQuery}", null, totals =>
+        {
+            OverallTotals = totals;
+            NonZeroSum = totals.Counters?.Sales?.Sum ?? 0;
+            if (totals.CashDrawer != null)
+                CashBalance = totals.CashDrawer.Sum;
+        });
     }
 
     /// <summary>
@@ -394,13 +381,11 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetLineLength()
     {
-        await Get($"kkt/lineLength?{DeviceQuery}");
-        var length = ReadResult<LineLengthV2>();
-        if (length == null)
-            return Ok;
-        LineLength = length.LineLength;
-        LineLengthPixels = length.LineLengthPixels;
-        return Ok;
+        return await Call<LineLengthV2>(HttpMethod.Get, $"kkt/lineLength?{DeviceQuery}", null, length =>
+        {
+            LineLength = length.LineLength;
+            LineLengthPixels = length.LineLengthPixels;
+        });
     }
 
     /// <summary>
@@ -408,15 +393,20 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetTotals()
     {
-        await Get($"kkt/counters/shift?{DeviceQuery}");
-        ShiftTotals = ReadResult<ResShiftTotal>();
-        return Ok;
+        return await Call<ResShiftTotal>(HttpMethod.Get, $"kkt/counters/shift?{DeviceQuery}", null, totals =>
+        {
+            ShiftTotals = totals;
+            if (totals.ShiftNumber > 0)
+                ShiftNumber = (int)totals.ShiftNumber;
+            if (totals.CashDrawer != null)
+                CashBalance = totals.CashDrawer.Sum;
+        });
     }
 
     /// <summary>
     /// Получение списка Z-отчётов за период
     /// </summary>
-    public async Task<bool> GetShiftList()
+    public async Task<bool> GetCloseShiftList()
     {
         var extra = ReportType > 0 ? $"reportType={ReportType}" : null;
         await GetReportList("shift/z/list", extra);
@@ -457,8 +447,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateCheck())
             return Ok;
-        await Post("check", CheckBody());
-        return Ok;
+        return await Call<FiscalParamsResult>(HttpMethod.Post, "check", CheckBody(), ApplyFiscalParams);
     }
 
     /// <summary>
@@ -468,8 +457,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateCheck())
             return Ok;
-        await Post("check/async", CheckBody());
-        return Ok;
+        return await PostTask("check/async", CheckBody());
     }
 
     /// <summary>
@@ -479,8 +467,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateCorrection120())
             return Ok;
-        await Post("correction120", Correction120Body());
-        return Ok;
+        return await Call<FiscalParamsResult>(HttpMethod.Post, "correction120", Correction120Body(), ApplyFiscalParams);
     }
 
     /// <summary>
@@ -490,8 +477,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateCorrection120())
             return Ok;
-        await Post("correction120/async", Correction120Body());
-        return Ok;
+        return await PostTask("correction120/async", Correction120Body());
     }
 
     /// <summary>
@@ -501,8 +487,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateCorrection105())
             return Ok;
-        await Post("correction105", Correction105Body());
-        return Ok;
+        return await Call<FiscalParamsResult>(HttpMethod.Post, "correction105", Correction105Body(), ApplyFiscalParams);
     }
 
     /// <summary>
@@ -512,14 +497,13 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateCorrection105())
             return Ok;
-        await Post("correction105/async", Correction105Body());
-        return Ok;
+        return await PostTask("correction105/async", Correction105Body());
     }
 
     /// <summary>
     /// Возвращает чек коррекции ФФД 1.2 по идентификатору документа (docId)
     /// </summary>
-    public async Task<bool> GetCorrection120(string documentId)
+    public async Task<bool> GetCheckCorrection120(string documentId)
     {
         DocumentId = documentId;
         await GetDocumentById("correction120");
@@ -529,7 +513,7 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Получение списка чеков коррекции ФФД 1.2
     /// </summary>
-    public async Task<bool> GetCorrection120List()
+    public async Task<bool> GetCheckCorrection120List()
     {
         await GetCheckList("correction120/list");
         return Ok;
@@ -538,7 +522,7 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Возвращает чек коррекции ФФД 1.0.5 по идентификатору документа (docId)
     /// </summary>
-    public async Task<bool> GetCorrection105(string documentId)
+    public async Task<bool> GetCheckCorrection105(string documentId)
     {
         DocumentId = documentId;
         await GetDocumentById("correction105");
@@ -548,7 +532,7 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Получение списка чеков коррекции ФФД 1.0.5
     /// </summary>
-    public async Task<bool> GetCorrection105List()
+    public async Task<bool> GetCheckCorrection105List()
     {
         await GetCheckList("correction105/list");
         return Ok;
@@ -560,19 +544,18 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetTaskStatus(string documentId)
     {
         DocumentId = documentId;
-        await Get($"task/status?{IdQuery}");
-        TaskStatus = ReadResult<ResponseTaskStatus>();
-        if (TaskStatus == null)
-            return Ok;
-        if (!string.IsNullOrEmpty(TaskStatus.FiscalSign))
-            FiscalSign = TaskStatus.FiscalSign!;
-        if (TaskStatus.DocNumber > 0)
-            CheckNumber = TaskStatus.DocNumber;
-        if (TaskStatus.ShiftNumber > 0)
-            ShiftNumber = TaskStatus.ShiftNumber;
-        if (!string.IsNullOrEmpty(TaskStatus.DocId))
-            DocumentId = TaskStatus.DocId!;
-        return Ok;
+        return await Call<ResponseTaskStatus>(HttpMethod.Get, $"task/status?{IdQuery}", null, status =>
+        {
+            TaskStatus = status;
+            if (!string.IsNullOrEmpty(status.FiscalSign))
+                FiscalSign = status.FiscalSign!;
+            if (status.DocNumber > 0)
+                CheckNumber = status.DocNumber;
+            if (status.ShiftNumber > 0)
+                ShiftNumber = status.ShiftNumber;
+            if (!string.IsNullOrEmpty(status.DocId))
+                DocumentId = status.DocId!;
+        });
     }
 
     /// <summary>
@@ -591,10 +574,11 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetFiscalSign(int docNumber)
     {
         CheckNumber = docNumber;
-        await Get($"check/fiscalSign?docNumber={CheckNumber}&{DeviceQuery}");
-        if (Ok && Result.ValueKind == JsonValueKind.String)
-            FiscalSign = Result.GetString() ?? "";
-        return Ok;
+        return await Call<string>(HttpMethod.Get, $"check/fiscalSign?docNumber={CheckNumber}&{DeviceQuery}", null, sign =>
+        {
+            if (Ok)
+                FiscalSign = sign;
+        });
     }
 
     /// <summary>
@@ -602,9 +586,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> PrintCheckCopy()
     {
-       
-        await Post("check/copy", new CheckbaseParameters { DeviceName = DeviceName, DocId = DocumentId });
-        return Ok;
+        return await Execute(HttpMethod.Post, "check/copy", new CheckbaseParameters { DeviceName = DeviceName, DocId = DocumentId });
     }
 
     /// <summary>
@@ -612,8 +594,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> PrintLastCheckCopy()
     {
-        await Post($"check/copy/last?{DeviceQuery}");
-        return Ok;
+        return await Execute(HttpMethod.Post, $"check/copy/last?{DeviceQuery}");
     }
 
     /// <summary>
@@ -622,9 +603,8 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetPrintForm(string documentId)
     {
         DocumentId = documentId;
-        await Get($"task/form?{IdQuery}");
-        PrintForm = (ReadResult<PrintFormLine[]>() ?? []).Select(x => new PrintLine(x)).ToList();
-        return Ok;
+        return await Call<PrintFormLine[]>(HttpMethod.Get, $"task/form?{IdQuery}", null,
+            lines => PrintForm = lines.Select(x => new PrintLine(x)).ToList());
     }
 
     /// <summary>
@@ -632,9 +612,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> CashIn()
     {
-        await Post("cashin", CashBody());
-        ApplyDocument(ReadResult<CheckDocument>());
-        return Ok;
+        return await Call<CheckDocument>(HttpMethod.Post, "cashin", CashBody(), ApplyCheckBaseDoc);
     }
 
     /// <summary>
@@ -642,9 +620,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> CashOut()
     {
-        await Post("cashout", CashBody());
-        ApplyDocument(ReadResult<CheckDocument>());
-        return Ok;
+        return await Call<CheckDocument>(HttpMethod.Post, "cashout", CashBody(), ApplyCheckBaseDoc);
     }
 
     /// <summary>
@@ -652,9 +628,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> OpenCashdrawer()
     {
-        await Post("cash/open", CheckBase());
-        ApplyDocument(ReadResult<CheckDocument>());
-        return Ok;
+        return await Call<CheckDocument>(HttpMethod.Post, "cash/open", CheckBase(), ApplyCheckBaseDoc);
     }
 
     /// <summary>
@@ -662,9 +636,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetCash()
     {
-        await Get($"cash?{DeviceQuery}");
-        CashBalance = ReadResult<CashSum>()?.Sum ?? 0;
-        return Ok;
+        return await Call<CashSum>(HttpMethod.Get, $"cash?{DeviceQuery}", null, cash => CashBalance = cash.Sum);
     }
 
     /// <summary>
@@ -706,14 +678,13 @@ public sealed partial class SkkmConnector
         if (!LoadPicture(filePath, out var base64))
             return Ok;
 
-        await Post("picture", new UploadPicture
+        return await Execute(HttpMethod.Post, "picture", new UploadPicture
         {
             DeviceName = DeviceName,
             PictureName = string.IsNullOrEmpty(PictureId) ? Path.GetFileNameWithoutExtension(filePath) : PictureId,
             Base64 = base64,
             Alignment = (int)PictureAlignment
         });
-        return Ok;
     }
 
     /// <summary>
@@ -721,9 +692,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetPictureList()
     {
-        await Get($"picture/list?{DeviceQuery}");
-        Pictures = ReadResult<List<Picture>>() ?? [];
-        return Ok;
+        return await Call<List<Picture>>(HttpMethod.Get, $"picture/list?{DeviceQuery}", null, pictures => Pictures = pictures);
     }
 
     /// <summary>
@@ -731,8 +700,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> OpenSessionRegistrationKM()
     {
-        await Post("marking/session/open", new CheckbaseParameters { DeviceName = DeviceName });
-        return Ok;
+        return await Execute(HttpMethod.Post, "marking/session/open", new CheckbaseParameters { DeviceName = DeviceName });
     }
 
     /// <summary>
@@ -740,8 +708,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> CloseSessionRegistrationKM()
     {
-        await Post("marking/session/close", new CheckbaseParameters { DeviceName = DeviceName });
-        return Ok;
+        return await Execute(HttpMethod.Post, "marking/session/close", new CheckbaseParameters { DeviceName = DeviceName });
     }
 
     /// <summary>
@@ -752,7 +719,7 @@ public sealed partial class SkkmConnector
         if (string.IsNullOrWhiteSpace(RequestKmGuid))
             RequestKmGuid = Guid.NewGuid().ToString();
 
-        await Post("marking/km/request", new RequestKmParameters
+        return await Call<RequestKmResult>(HttpMethod.Post, "marking/km/request", new RequestKmParameters
         {
             DeviceName = DeviceName,
             RequestKM = new RequestKm
@@ -767,9 +734,7 @@ public sealed partial class SkkmConnector
                 FractionalQuantityNumerator = FractionalQuantityNumerator > 0 ? FractionalQuantityNumerator : null,
                 FractionalQuantityDenominator = FractionalQuantityDenominator > 0 ? FractionalQuantityDenominator : null
             }
-        });
-        MarkingCheck = ReadResult<RequestKmResult>();
-        return Ok;
+        }, result => MarkingCheck = result);
     }
 
     /// <summary>
@@ -777,11 +742,12 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetProcessingKMResult()
     {
-        await Get($"marking/km/result?{DeviceQuery}");
-        MarkingProcessing = ReadResult<ProcessingKmResult>();
-        if (!string.IsNullOrWhiteSpace(MarkingProcessing?.Guid))
-            RequestKmGuid = MarkingProcessing!.Guid!;
-        return Ok;
+        return await Call<ProcessingKmResult>(HttpMethod.Get, $"marking/km/result?{DeviceQuery}", null, result =>
+        {
+            MarkingProcessing = result;
+            if (!string.IsNullOrWhiteSpace(result.Guid))
+                RequestKmGuid = result.Guid!;
+        });
     }
 
     /// <summary>
@@ -789,13 +755,12 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> ConfirmKM()
     {
-        await Post("marking/km/confirm", new RequestConfirmKm
+        return await Execute(HttpMethod.Post, "marking/km/confirm", new RequestConfirmKm
         {
             DeviceName = DeviceName,
             GUID = RequestKmGuid,
             ConfirmationType = (int)ConfirmationType
         });
-        return Ok;
     }
 
     /// <summary>
@@ -803,9 +768,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> PrintSlip()
     {
-        await Post("slip", SlipBody());
-        ApplyDocument(ReadResult<CheckDocument>());
-        return Ok;
+        return await Call<CheckDocument>(HttpMethod.Post, "slip", SlipBody(), ApplyCheckBaseDoc);
     }
 
     /// <summary>
@@ -813,8 +776,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> PrintSlipAsync()
     {
-        await Post("slip/async", SlipBody());
-        return Ok;
+        return await PostTask("slip/async", SlipBody());
     }
 
     /// <summary>
@@ -822,14 +784,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetVersion()
     {
-        await Get("version");
-        if (Result.ValueKind == JsonValueKind.String)
-            ServerVersion = Result.GetString() ?? "";
-        else if (Result.ValueKind == JsonValueKind.Object && Result.TryGetProperty("ServerVersion", out var version))
-            ServerVersion = version.GetString() ?? "";
-        else
-            ServerVersion = Result.ToString();
-        return Ok;
+        return await Call<ServerVersionResult>(HttpMethod.Get, "version", null, version => ServerVersion = version.ServerVersion ?? "");
     }
 
     /// <summary>
@@ -837,8 +792,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> RebootDevice()
     {
-        await Post("kkt/reboot", CheckBase());
-        return Ok;
+        return await Execute(HttpMethod.Post, "kkt/reboot", CheckBase());
     }
 
     /// <summary>
@@ -846,9 +800,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetPoolList()
     {
-        await Get("pool/list");
-        Pools = ReadResult<string[]>() ?? [];
-        return Ok;
+        return await Call<string[]>(HttpMethod.Get, "pool/list", null, pools => Pools = pools);
     }
 
     /// <summary>
@@ -856,9 +808,9 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetDeviceListByPool()
     {
-        await Get($"kkt/list/byPool?pool={Uri.EscapeDataString(PoolName)}");
-        Devices = ReadResult<DeviceListResponse[]>() ?? [];
-        return Ok;
+        // Сервер возвращает имена касс пула (List<string>).
+        return await Call<string[]>(HttpMethod.Get, $"kkt/list/byPool?pool={Uri.EscapeDataString(PoolName)}", null,
+            names => Devices = names.Select(name => new DeviceListResponse { DeviceName = name }).ToArray());
     }
 
     /// <summary>
@@ -866,8 +818,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> OpenShiftAsync()
     {
-        await Post("shift/open/async", CheckBase());
-        return Ok;
+        return await PostTask("shift/open/async", CheckBase());
     }
 
     /// <summary>
@@ -875,8 +826,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> CloseShiftAsync()
     {
-        await Post("shift/z/async", CheckBase());
-        return Ok;
+        return await PostTask("shift/z/async", CheckBase());
     }
 
     /// <summary>
@@ -884,8 +834,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> ReportXAsync()
     {
-        await Post("shift/x/async", CheckBase());
-        return Ok;
+        return await PostTask("shift/x/async", CheckBase());
     }
 
     /// <summary>
@@ -893,8 +842,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> ReportSettlementAsync()
     {
-        await Post("report/settlement/async", CheckBase());
-        return Ok;
+        return await PostTask("report/settlement/async", CheckBase());
     }
 
     /// <summary>
@@ -902,8 +850,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> CashInAsync()
     {
-        await Post("cashin/async", CashBody());
-        return Ok;
+        return await PostTask("cashin/async", CashBody());
     }
 
     /// <summary>
@@ -911,8 +858,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> CashOutAsync()
     {
-        await Post("cashout/async", CashBody());
-        return Ok;
+        return await PostTask("cashout/async", CashBody());
     }
 
     /// <summary>
@@ -921,24 +867,15 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetCheckList(int shiftNumber)
     {
         ShiftNumber = shiftNumber;
-        await Get($"check/list?{DeviceQuery}&{DateQuery(ShiftsFrom, ShiftsTo)}&shift={ShiftNumber}");
-        Checks = (ReadResult<CheckDocument[]>() ?? []).Select(x => new Check(x)).ToList();
-        return Ok;
+        return await Call<CheckDocument[]>(HttpMethod.Get, $"check/list?{DeviceQuery}&{DateQuery(ShiftsFrom, ShiftsTo)}&shift={ShiftNumber}", null, ApplyCheckList);
     }
 
     /// <summary>
-    /// Печать копии чека по данным фискального накопителя.
+    /// Печать копии чека из ФН по <see cref="DocumentId"/> (Guid или ФП чека). Только на ККТ исходного чека.
     /// </summary>
     public async Task<bool> PrintCheckCopyFn()
     {
-        await Post("check/copy/fn", new CheckCopyFnParameters
-        {
-            DeviceName = DeviceName,
-            FnNumber = FnNumber,
-            FiscalSign = FiscalSign,
-            DocNumber = CheckNumber
-        });
-        return Ok;
+        return await Execute(HttpMethod.Post, "check/copy/fn", new CheckbaseParameters { DeviceName = DeviceName, DocId = DocumentId });
     }
 
     /// <summary>
@@ -966,10 +903,11 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetPicture(string pictureId)
     {
         PictureId = pictureId;
-        await Get($"picture?{DeviceQuery}&id={Uri.EscapeDataString(PictureId)}");
-        if (Ok && Result.ValueKind == JsonValueKind.String)
-            PictureBase64Result = Result.GetString() ?? "";
-        return Ok;
+        return await Call<string>(HttpMethod.Get, $"picture?{DeviceQuery}&id={Uri.EscapeDataString(PictureId)}", null, picture =>
+        {
+            if (Ok)
+                PictureBase64Result = picture;
+        });
     }
 
     /// <summary>
@@ -977,8 +915,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> DeletePicture()
     {
-        await Delete($"picture?{DeviceQuery}&id={Uri.EscapeDataString(PictureId)}");
-        return Ok;
+        return await Execute(HttpMethod.Delete, $"picture?{DeviceQuery}&id={Uri.EscapeDataString(PictureId)}");
     }
 
     /// <summary>
@@ -988,10 +925,11 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateTemplate())
             return Ok;
-        await Post("template", TemplateBody());
-        if (Ok && Result.ValueKind == JsonValueKind.String)
-            TemplateName = Result.GetString() ?? TemplateName;
-        return Ok;
+        return await Call<string>(HttpMethod.Post, "template", TemplateBody(), name =>
+        {
+            if (Ok)
+                TemplateName = name;
+        });
     }
 
     /// <summary>
@@ -1001,8 +939,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateTemplate())
             return Ok;
-        await Put("template", TemplateBody());
-        return Ok;
+        return await Execute(HttpMethod.Put, "template", TemplateBody());
     }
 
     /// <summary>
@@ -1012,8 +949,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateTemplateName(TemplateName, "шаблона печати"))
             return Ok;
-        await Delete($"template?id={Uri.EscapeDataString(TemplateName)}");
-        return Ok;
+        return await Execute(HttpMethod.Delete, $"template?id={Uri.EscapeDataString(TemplateName)}");
     }
 
     /// <summary>
@@ -1031,9 +967,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetTemplateList()
     {
-        await Get("template/list");
-        Templates = ReadResult<string[]>() ?? [];
-        return Ok;
+        return await Call<string[]>(HttpMethod.Get, "template/list", null, templates => Templates = templates);
     }
 
     /// <summary>
@@ -1042,9 +976,7 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetTemplate(string name)
     {
         TemplateName = name;
-        await Get($"template?name={Uri.EscapeDataString(TemplateName)}");
-        ApplyTemplate(ReadResult<PrintTemplate>());
-        return Ok;
+        return await Call<PrintTemplate>(HttpMethod.Get, $"template?name={Uri.EscapeDataString(TemplateName)}", null, ApplyTemplate);
     }
 
     /// <summary>
@@ -1054,8 +986,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateCheckTemplate(TemplateName))
             return Ok;
-        await Post("checkTemplate", CheckTemplateBody(TemplateName));
-        return Ok;
+        return await Execute(HttpMethod.Post, "checkTemplate", CheckTemplateBody(TemplateName));
     }
 
     /// <summary>
@@ -1075,8 +1006,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateCheckTemplate(TemplateName))
             return Ok;
-        await Put("checkTemplate", CheckTemplateBody(TemplateName));
-        return Ok;
+        return await Execute(HttpMethod.Put, "checkTemplate", CheckTemplateBody(TemplateName));
     }
 
     /// <summary>
@@ -1096,8 +1026,7 @@ public sealed partial class SkkmConnector
     {
         if (!ValidateTemplateName(TemplateName, "шаблона чека"))
             return Ok;
-        await Delete($"checkTemplate?id={Uri.EscapeDataString(TemplateName)}");
-        return Ok;
+        return await Execute(HttpMethod.Delete, $"checkTemplate?id={Uri.EscapeDataString(TemplateName)}");
     }
 
     /// <summary>
@@ -1115,9 +1044,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetCheckTemplateList()
     {
-        await Get("checkTemplate/list");
-        CheckTemplates = ReadResult<CheckTemplateListItem[]>() ?? [];
-        return Ok;
+        return await Call<CheckTemplateListItem[]>(HttpMethod.Get, "checkTemplate/list", null, templates => CheckTemplates = templates);
     }
 
     /// <summary>
@@ -1126,9 +1053,7 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetCheckTemplate(string name)
     {
         TemplateName = name;
-        await Get($"checkTemplate?id={Uri.EscapeDataString(TemplateName)}");
-        ApplyCheckTemplate(ReadResult<CheckTemplate>());
-        return Ok;
+        return await Call<CheckTemplate>(HttpMethod.Get, $"checkTemplate?id={Uri.EscapeDataString(TemplateName)}", null, ApplyCheckTemplate);
     }
 
     /// <summary>
@@ -1136,9 +1061,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetQueue()
     {
-        await Get("queue");
-        Queue = ReadResult<QueueItem[]>() ?? [];
-        return Ok;
+        return await Call<QueueItem[]>(HttpMethod.Get, "queue", null, queue => Queue = queue);
     }
 
     /// <summary>
@@ -1147,9 +1070,7 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetQueueTask(string taskId)
     {
         QueueTaskId = taskId;
-        await Get($"queue/task?taskId={Uri.EscapeDataString(QueueTaskId)}");
-        QueueTask = ReadResult<QueueTaskState>();
-        return Ok;
+        return await Call<QueueTaskState>(HttpMethod.Get, $"queue/task?taskId={Uri.EscapeDataString(QueueTaskId)}", null, task => QueueTask = task);
     }
 
     /// <summary>
@@ -1158,10 +1079,10 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetQueueTaskHistory(string taskId)
     {
         QueueTaskId = taskId;
-        await Get($"queue/task/history?taskId={Uri.EscapeDataString(QueueTaskId)}");
-        QueueTask = ReadResult<QueueTaskState>();
-        if (QueueTask != null)
-            OperationHistory = QueueTask.History
+        return await Call<QueueTaskState>(HttpMethod.Get, $"queue/task/history?taskId={Uri.EscapeDataString(QueueTaskId)}", null, task =>
+        {
+            QueueTask = task;
+            OperationHistory = task.History
                 .Select(h => new OperationHistoryEntry(new OperationHistoryItem
                 {
                     Time = h.Time,
@@ -1170,7 +1091,7 @@ public sealed partial class SkkmConnector
                     Info = h.Info
                 }))
                 .ToList();
-        return Ok;
+        });
     }
 
     /// <summary>
@@ -1178,8 +1099,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> CancelQueueTask()
     {
-        await Delete($"queue/task?taskId={Uri.EscapeDataString(QueueTaskId)}");
-        return Ok;
+        return await Execute(HttpMethod.Delete, $"queue/task?taskId={Uri.EscapeDataString(QueueTaskId)}");
     }
 
     /// <summary>
@@ -1187,13 +1107,11 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> VerifyMarking()
     {
-        await Post("marking/km/verify", new MarkingCodesRequest
+        return await Call<MarkingVerifyResult>(HttpMethod.Post, "marking/km/verify", new MarkingCodesRequest
         {
             DeviceName = DeviceName,
             Codes = MarkingCodes.ToList()
-        });
-        MarkingVerify = ReadResult<MarkingVerifyResult>();
-        return Ok;
+        }, result => MarkingVerify = result);
     }
 
     /// <summary>
@@ -1201,13 +1119,11 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> VerifyMarkingTsPiot()
     {
-        await Post("marking/km/tspiot/verify", new MarkingCodesRequest
+        return await Call<MarkingVerifyResult>(HttpMethod.Post, "marking/km/tspiot/verify", new MarkingCodesRequest
         {
             DeviceName = DeviceName,
             Codes = MarkingCodes.ToList()
-        });
-        MarkingVerify = ReadResult<MarkingVerifyResult>();
-        return Ok;
+        }, result => MarkingVerify = result);
     }
 
     /// <summary>
@@ -1215,13 +1131,11 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> VerifyMarkingLmcz()
     {
-        await Post("marking/km/lmcz/verify", new MarkingCodesRequest
+        return await Call<MarkingVerifyResult>(HttpMethod.Post, "marking/km/lmcz/verify", new MarkingCodesRequest
         {
             DeviceName = DeviceName,
             Codes = MarkingCodes.ToList()
-        });
-        MarkingVerify = ReadResult<MarkingVerifyResult>();
-        return Ok;
+        }, result => MarkingVerify = result);
     }
 
     /// <summary>
@@ -1229,8 +1143,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> Fiscalization()
     {
-        await Post("fiscalization", FiscalizationBody());
-        return Ok;
+        return await Call<FiscalizationDoc>(HttpMethod.Post, "fiscalization", FiscalizationBody(), ApplyCheckBaseDoc);
     }
 
     /// <summary>
@@ -1238,8 +1151,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> FiscalizationAsync()
     {
-        await Post("fiscalization/async", FiscalizationBody());
-        return Ok;
+        return await PostTask("fiscalization/async", FiscalizationBody());
     }
 
     /// <summary>
@@ -1248,23 +1160,29 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetFiscalization(string documentId)
     {
         DocumentId = documentId;
-        await GetDocumentById("fiscalization");
-        FiscalizationDocument = ReadResult<FiscalizationDocument>();
-        if (FiscalizationDocument != null)
+        return await Call<FiscalizationDoc>(HttpMethod.Get, $"fiscalization?{IdQuery}", null, doc =>
         {
-            if (!string.IsNullOrEmpty(FiscalizationDocument.DocId))
-                DocumentId = FiscalizationDocument.DocId;
-            if (!string.IsNullOrEmpty(FiscalizationDocument.FiscalSign))
-                FiscalSign = FiscalizationDocument.FiscalSign;
-            if (!string.IsNullOrEmpty(FiscalizationDocument.RnNumber))
-                RnNumber = FiscalizationDocument.RnNumber;
-            if (FiscalizationDocument.ShiftNumber > 0)
-                ShiftNumber = FiscalizationDocument.ShiftNumber;
-            if (FiscalizationDocument.DocNumber > 0)
-                CheckNumber = FiscalizationDocument.DocNumber;
-            IsFiscal = FiscalizationDocument.IsFiscal;
-        }
-        return Ok;
+            ApplyCheckBaseDoc(doc);
+            FiscalizationDocument = new FiscalizationDocument
+            {
+                OperationType = doc.OperationType,
+                RnNumber = doc.RnNumber ?? "",
+                TaxationSystems = doc.TaxationSystems ?? "",
+                Vatin = doc.Vatin ?? "",
+                CompanyName = doc.CompanyName ?? "",
+                FfdVersionKkt = doc.FfdVersionKkt ?? "",
+                FfdVersionFn = doc.FfdVersionFn ?? "",
+                IsFiscal = doc.IsFiscal,
+                DocId = doc.DocId ?? "",
+                DeviceName = doc.DeviceName ?? "",
+                ShiftNumber = doc.ShiftNumber,
+                DocNumber = doc.DocNumber,
+                FiscalSign = doc.FiscalSign ?? ""
+            };
+            if (!string.IsNullOrEmpty(doc.RnNumber))
+                RnNumber = doc.RnNumber!;
+            IsFiscal = doc.IsFiscal;
+        });
     }
 
     /// <summary>
@@ -1272,9 +1190,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetFiscalizationList()
     {
-        await Get($"fiscalization/list?{DeviceQuery}");
-        Fiscalizations = ReadResult<FiscalizationDocument[]>() ?? [];
-        return Ok;
+        return await Call<FiscalizationDocument[]>(HttpMethod.Get, $"fiscalization/list?{DeviceQuery}", null, list => Fiscalizations = list);
     }
 
     /// <summary>
@@ -1283,9 +1199,7 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetOperationLast()
     {
         var processed = IsProcessed ? "true" : "false";
-        await Get($"operation/last?tasktype={(int)PaymentType}&isProcessed={processed}");
-        ApplyOperation(ReadResult<DeviceTaskInfo>());
-        return Ok;
+        return await Call<DeviceTaskInfo>(HttpMethod.Get, $"operation/last?tasktype={(int)PaymentType}&isProcessed={processed}", null, ApplyOperation);
     }
 
     /// <summary>
@@ -1294,9 +1208,7 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetOperation(string documentId)
     {
         DocumentId = documentId;
-        await Get($"operation?{DocIdQuery}");
-        ApplyOperation(ReadResult<DeviceTaskInfo>());
-        return Ok;
+        return await Call<DeviceTaskInfo>(HttpMethod.Get, $"operation?{DocIdQuery}", null, ApplyOperation);
     }
 
     /// <summary>
@@ -1305,11 +1217,8 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetOperationHistory(string documentId)
     {
         DocumentId = documentId;
-        await Get($"operation/history?{DocIdQuery}");
-        OperationHistory = (ReadResult<OperationHistoryItem[]>() ?? [])
-            .Select(h => new OperationHistoryEntry(h))
-            .ToList();
-        return Ok;
+        return await Call<OperationHistoryItem[]>(HttpMethod.Get, $"operation/history?{DocIdQuery}", null,
+            history => OperationHistory = history.Select(h => new OperationHistoryEntry(h)).ToList());
     }
 
     /// <summary>
@@ -1318,10 +1227,11 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetOperationTlv(string documentId)
     {
         DocumentId = documentId;
-        await Get($"operation/tlv?{DocIdQuery}");
-        if (Ok && Result.ValueKind == JsonValueKind.String)
-            OperationTlv = Result.GetString() ?? "";
-        return Ok;
+        return await Call<string>(HttpMethod.Get, $"operation/tlv?{DocIdQuery}", null, tlv =>
+        {
+            if (Ok)
+                OperationTlv = tlv;
+        });
     }
 
     /// <summary>
@@ -1330,9 +1240,7 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetOperationKm(string documentId)
     {
         DocumentId = documentId;
-        await Get($"operation/km?{DocIdQuery}");
-        OperationKm = ReadResult<OperationKmRow[]>() ?? [];
-        return Ok;
+        return await Call<OperationKmRow[]>(HttpMethod.Get, $"operation/km?{DocIdQuery}", null, rows => OperationKm = rows);
     }
 
     /// <summary>
@@ -1341,9 +1249,8 @@ public sealed partial class SkkmConnector
     public async Task<bool> GetOperationRelated(string documentId)
     {
         DocumentId = documentId;
-        await Get($"operation/related?{DocIdQuery}");
-        RelatedOperations = (ReadResult<DeviceTaskInfo[]>() ?? []).Select(x => new RelatedOperation(x)).ToList();
-        return Ok;
+        return await Call<DeviceTaskInfo[]>(HttpMethod.Get, $"operation/related?{DocIdQuery}", null,
+            related => RelatedOperations = related.Select(x => new RelatedOperation(x)).ToList());
     }
 
     /// <summary>
@@ -1351,9 +1258,7 @@ public sealed partial class SkkmConnector
     /// </summary>
     public async Task<bool> GetOperationList()
     {
-        await Get($"operation/list?{DateQuery(ShiftsFrom, ShiftsTo)}");
-        Operations = ReadResult<OperationListItem[]>() ?? [];
-        return Ok;
+        return await Call<OperationListItem[]>(HttpMethod.Get, $"operation/list?{DateQuery(ShiftsFrom, ShiftsTo)}", null, operations => Operations = operations);
     }
 
     private FiscalizationRequest FiscalizationBody()

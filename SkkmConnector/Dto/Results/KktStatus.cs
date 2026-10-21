@@ -110,6 +110,12 @@ namespace RBSoftSkkm
         public bool IsOpenDocument { get; set; }
 
         /// <summary>
+        /// Предупреждения ФН загружены.
+        /// </summary>
+        [JsonPropertyName("WarningsLoaded")]
+        public bool WarningsLoaded { get; set; }
+
+        /// <summary>
         /// Ширина чековой ленты.
         /// </summary>
         [JsonPropertyName("LineLength")]

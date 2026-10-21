@@ -131,8 +131,6 @@ public sealed partial class SkkmConnector
         Ok = false;
         ErrorCode = ValidationErrorCode;
         ErrorDescription = message;
-        Result = default;
-        FiscalResult = null;
         return false;
     }
 
@@ -546,7 +544,8 @@ public sealed partial class SkkmConnector
                 SaleAddress = check.SaleAddress,
                 SaleLocation = check.SaleLocation,
                 Positions = check.Positions,
-                Payments = check.Payments,
+                // Сервер требует Payments в шаблоне чека (иначе ArgumentNullException), поэтому всегда передаём.
+                Payments = check.Payments ?? new Payments(),
                 ElectronicPaymentInfo = check.ElectronicPaymentInfo,
                 Electronically = check.Electronically,
                 OperationalAttribute = check.OperationalAttribute,
@@ -673,39 +672,45 @@ public sealed partial class SkkmConnector
         _ => null
     };
 
-    private void RestorePositionsFromPrintLines(IEnumerable<PrintTemplateLine> lines)
+    private void RestorePositionsFromPrintLines(IEnumerable<IPrintLine> lines)
     {
         _positions.Clear();
         foreach (var line in lines)
+            AddPrintLine(line);
+    }
+
+    /// <summary>
+    /// Нефискальная строка из ответа сервера (печатная форма, шаблон) обратно в позицию.
+    /// </summary>
+    private void AddPrintLine(IPrintLine line)
+    {
+        switch (line.Type)
         {
-            switch (line.Type)
-            {
-                case PrintLineType.Separator:
-                    AddSeparatorLine(line.SeparatorLine?.LineStyle ?? LineStyle.Solid);
-                    break;
-                case PrintLineType.Barcode when line.Barcode != null:
-                    AddBarcode(
-                        line.Barcode.Type ?? BarcodeType.QR,
-                        line.Barcode.Value ?? "",
-                        line.Alignment,
-                        line.Barcode.Height,
-                        line.Barcode.BarWidth,
-                        line.Barcode.PrintText);
-                    break;
-                case PrintLineType.Picture when line.Picture != null:
-                    AddPictureBase64(
-                        line.Picture.PictureBase64 ?? "",
-                        line.Picture.Alignment,
-                        line.Picture.Width ?? 0,
-                        line.Picture.Height ?? 0);
-                    break;
-                default:
-                    if (!string.IsNullOrEmpty(line.LineRight))
-                        AddText(line.Line ?? "", line.LineRight, line.Font);
-                    else
-                        AddText(line.Line ?? "", line.Font, line.Alignment);
-                    break;
-            }
+            case PrintLineType.Separator:
+                AddSeparatorLine(line.SeparatorLine?.LineStyle ?? LineStyle.Solid);
+                break;
+            case PrintLineType.Barcode when line.Barcode != null:
+                AddBarcode(
+                    line.Barcode.Type ?? BarcodeType.QR,
+                    line.Barcode.Value ?? "",
+                    line.Alignment,
+                    line.Barcode.Height,
+                    line.Barcode.BarWidth,
+                    line.Barcode.PrintText);
+                break;
+            case PrintLineType.Picture when line.Picture != null:
+                AddPictureBase64(
+                    line.Picture.PictureBase64 ?? "",
+                    line.Picture.Alignment,
+                    line.Picture.Width ?? 0,
+                    line.Picture.Height ?? 0);
+                break;
+            default:
+                if (!string.IsNullOrEmpty(line.LineRight))
+                    AddText(line.Line ?? "", line.LineRight, line.Font);
+                else
+                    AddText(line.Line ?? "", line.Font, line.Alignment);
+                break;
         }
     }
 
@@ -718,6 +723,12 @@ public sealed partial class SkkmConnector
         TimeZone = document.TimeZone;
         if (!string.IsNullOrEmpty(document.AdditionalAttribute))
             AdditionalAttribute = document.AdditionalAttribute!;
+        if (!string.IsNullOrEmpty(document.SaleAddress))
+            SaleAddress = document.SaleAddress!;
+        if (!string.IsNullOrEmpty(document.SaleLocation))
+            SaleLocation = document.SaleLocation!;
+        if (!string.IsNullOrEmpty(document.SenderEmail))
+            SenderEmail = document.SenderEmail!;
 
         if (document.Payments != null)
         {
@@ -739,6 +750,12 @@ public sealed partial class SkkmConnector
         _positions.Clear();
         foreach (var item in document.CheckItems)
         {
+            // Нефискальная строка чека (текст, разделитель, штрихкод, картинка).
+            if (item.PrintLine != null)
+            {
+                AddPrintLine(item.PrintLine);
+                continue;
+            }
             if (!item.IsFiscal && string.IsNullOrWhiteSpace(item.Name))
                 continue;
 

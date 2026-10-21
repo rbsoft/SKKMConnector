@@ -3,9 +3,10 @@ using System.Text.Json.Serialization;
 namespace RBSoftSkkm;
 
 /// <summary>
-/// Сохранённый документ с сервера 
+/// Документ с сервера (сервер: CheckBase и наследники — чек, коррекция, отчёт, внесение/выемка, слип).
+/// Поля всех типов документов в одной модели; у конкретного документа незаполненные поля остаются по умолчанию.
 /// </summary>
-public sealed class CheckDocument
+public class CheckDocument
 {
     /// <summary>
     /// Позиции чека.
@@ -84,6 +85,12 @@ public sealed class CheckDocument
     /// </summary>
     [JsonPropertyName("Payments")]
     public CheckPayments? Payments { get; set; }
+
+    /// <summary>
+    /// Детализация безналичных оплат.
+    /// </summary>
+    [JsonPropertyName("ElectronicPayments")]
+    public ElectronicPayment[]? ElectronicPayments { get; set; }
 
     /// <summary>
     /// Заголовок документа.
@@ -212,10 +219,16 @@ public sealed class CheckDocument
     public string? DocId { get; set; }
 
     /// <summary>
-    /// Дата создания документа (с сохранением часового пояса сервера).
+    /// Идентификатор исходного документа (у копий и связанных операций).
+    /// </summary>
+    [JsonPropertyName("BaseDocId")]
+    public string? BaseDocId { get; set; }
+
+    /// <summary>
+    /// Дата создания документа.
     /// </summary>
     [JsonPropertyName("Date")]
-    public DateTimeOffset Date { get; set; }
+    public DateTime Date { get; set; }
 
     /// <summary>
     /// Идентификатор терминала, с которого пришёл документ.

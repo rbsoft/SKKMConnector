@@ -142,6 +142,11 @@ public sealed partial class SkkmConnector
     public bool StatusIsOpenDocument => Status?.IsOpenDocument ?? false;
 
     /// <summary>
+    /// Предупреждения ФН загружены.
+    /// </summary>
+    public bool StatusIsWarningsLoaded => Status?.WarningsLoaded ?? false;
+
+    /// <summary>
     /// Номер смены (из статуса).
     /// </summary>
     public int StatusShiftNumber => Status?.ShiftNumber ?? 0;
@@ -2721,9 +2726,14 @@ public sealed partial class SkkmConnector
     public string? CheckDocId => Check?.DocId;
 
     /// <summary>
+    /// Идентификатор исходного документа (у копий и связанных операций).
+    /// </summary>
+    public string? CheckBaseDocId => Check?.BaseDocId;
+
+    /// <summary>
     /// Дата создания документа.
     /// </summary>
-    public DateTimeOffset? CheckDate => Check?.Date;
+    public DateTime? CheckDate => Check?.Date;
 
     /// <summary>
     /// Идентификатор терминала.
@@ -2920,6 +2930,11 @@ public sealed partial class SkkmConnector
     /// Встречное предоставление (ответ).
     /// </summary>
     public decimal PaymentsBarter => Check?.Payments?.Barter ?? 0;
+
+    /// <summary>
+    /// Детализация безналичных оплат (ответ).
+    /// </summary>
+    public IReadOnlyList<ElectronicPayment> CheckElectronicPayments => Check?.ElectronicPayments ?? [];
 
     // Позиции чека (массив CheckItems)
 

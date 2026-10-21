@@ -30,7 +30,7 @@ public sealed class Check
     /// <summary> Дата/время документа по часам ФН. </summary>
     public DateTime FiscalDate => _d.FiscalDate;
     /// <summary> Дата/время постановки документа. </summary>
-    public DateTimeOffset Date => _d.Date;
+    public DateTime Date => _d.Date;
     /// <summary> Сумма чека. </summary>
     public decimal Sum => _d.Sum;
     /// <summary> Сдача. </summary>

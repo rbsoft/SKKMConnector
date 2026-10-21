@@ -104,6 +104,36 @@ public sealed class CheckTemplateDocument
     public string? AdditionalAttribute { get; set; }
 
     /// <summary>
+    /// Адрес расчётов.
+    /// </summary>
+    [JsonPropertyName("SaleAddress")]
+    public string? SaleAddress { get; set; }
+
+    /// <summary>
+    /// Место расчётов.
+    /// </summary>
+    [JsonPropertyName("SaleLocation")]
+    public string? SaleLocation { get; set; }
+
+    /// <summary>
+    /// Email отправителя чека.
+    /// </summary>
+    [JsonPropertyName("SenderEmail")]
+    public string? SenderEmail { get; set; }
+
+    /// <summary>
+    /// ФИО кассира.
+    /// </summary>
+    [JsonPropertyName("CashierName")]
+    public string? CashierName { get; set; }
+
+    /// <summary>
+    /// ИНН кассира.
+    /// </summary>
+    [JsonPropertyName("CashierVatin")]
+    public string? CashierVatin { get; set; }
+
+    /// <summary>
     /// Данные коррекции, если шаблон — чек коррекции.
     /// </summary>
     [JsonPropertyName("CorrectionData")]

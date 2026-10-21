@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace RBSoftSkkm;
 
 /// <summary>
@@ -8,5 +10,6 @@ public sealed class ReplicationItem
     /// <summary>
     /// Количество документов.
     /// </summary>
+    [JsonPropertyName("docCount")]
     public int DocCount { get; set; }
 }

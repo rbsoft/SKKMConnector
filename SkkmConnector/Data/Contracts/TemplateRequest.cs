@@ -77,26 +77,3 @@ internal sealed class CheckTemplateDocumentRequest
     public CorrectionData? CorrectionData { get; set; }
 }
 
-internal sealed class CheckCopyFnParameters
-{
-    [JsonPropertyName("DeviceName")]
-    public string? DeviceName { get; set; }
-
-    [JsonPropertyName("FnNumber")]
-    public string? FnNumber { get; set; }
-
-    [JsonPropertyName("FiscalSign")]
-    public string? FiscalSign { get; set; }
-
-    [JsonPropertyName("DocNumber")]
-    public int DocNumber { get; set; }
-}
-
-internal sealed class MarkingCodesRequest
-{
-    [JsonPropertyName("DeviceName")]
-    public string? DeviceName { get; set; }
-
-    [JsonPropertyName("Codes")]
-    public List<string> Codes { get; set; } = [];
-}

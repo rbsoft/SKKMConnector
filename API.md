@@ -3,6 +3,7 @@
 - Базовый путь вебсервиса: `/PrintService/api/v4`
 - Транспорт: HTTP, порт по умолчанию `4398`
 - Встроенная документация сервера: `http://<адрес-сервера>:8888/Doc/ApiDescription`
+- Каждый метод заполняет `Ok`, `ErrorCode`, `ErrorDescription` статусом ответа сервера. В строке **Заполняет** у метода — остальные свойства; если сервер поле не прислал, свойство остаётся пустым.
 
 ---
 
@@ -10,6 +11,8 @@
 
 ### `Ping()`
 `GET ping`
+
+**Заполняет:** `ServerProduct`, `ServerVersion`.
 
 Проверка доступности сервера ККМ. Не требует передачи ключа доступа (`api_key`)
 
@@ -25,6 +28,8 @@
 ### `GetVersion()`
 `GET version`
 
+**Заполняет:** `ServerVersion`.
+
 Получение текущей версии сервера.
 
 **Тело ответа**
@@ -37,6 +42,8 @@
 
 ### `GetDeviceList()`
 `GET kkt/list`
+
+**Заполняет:** `Devices` (`DeviceNames`, `DeviceDrivers`, `DevicePools`, `DeviceStatusDescriptions`).
 
 Получение список зарегистрированных ККТ.
 
@@ -52,6 +59,8 @@
 
 ### `GetDeviceListByPool()`
 `GET kkt/list/byPool`
+
+**Заполняет:** `Devices`, `DeviceNames` (сервер возвращает только имена касс пула).
 
 Получить список устройств, входящих в указанный пул. 
 
@@ -74,6 +83,8 @@
 ### `GetPoolList()`
 `GET pool/list`
 
+**Заполняет:** `Pools`.
+
 Получение списка всех пулов.
 
 **Тело ответа**
@@ -84,8 +95,10 @@
 | --- | --- | --- | --- | --- |
 | Result | string[] | - | Название пулов | "asd", <br>"dsa" |
 
-### `Connect()`
+### `GetKktInfo()`
 `GET kkt`
+
+**Заполняет:** `ServerVersion`; статус: `ShiftNumber`, `CheckNumber`, `CurrentShiftState`, `ComputerTime`, `DeviceTime`, `LineLength`, `LineLengthPixels`, `IsFnPresent`, `IsFiscal`, `Status…`, `License…`, `Ism…`, `Backlog…`, `FnWarnings…`; устройство: `Device…`, `FnFfdVersion`; ФН: `FnNumber`, `RnNumber`, `FnsUrl`, `FnValidityDate`, `Fn…`, `FnModes…`, `Ofd…`, `Driver…`.
 
 Получение подробной информации об устройстве ККТ.
 
@@ -109,6 +122,8 @@
 
 ### `GetStatus()`
 `GET kkt/status`
+
+**Заполняет:** `ShiftNumber`, `CheckNumber`, `CurrentShiftState`, `ComputerTime`, `DeviceTime`, `LineLength`, `LineLengthPixels`, `IsFnPresent`, `IsFiscal`, `Status…`, `License…`, `Ism…`, `Backlog…`, `FnWarnings…`.
 
 Получение расширенного статуса ККТ.
 
@@ -165,6 +180,8 @@
 ### `GetShiftStatus()`
 `GET kkt/shift/status`
 
+**Заполняет:** `ShiftNumber`, `CheckNumber`, `CurrentShiftState`, `Backlog…`, `ShiftStatus…`.
+
 Получение краткого статуса смены и очереди ОФД.
 
 **Параметры запроса**
@@ -187,6 +204,8 @@
 ### `GetLineLength()`
 `GET kkt/lineLength`
 
+**Заполняет:** `LineLength`, `LineLengthPixels`.
+
 Получение максимальной ширины строки чека устройства.
 
 **Параметры запроса**
@@ -206,6 +225,8 @@
 
 ### `GetTotals()`
 `GET kkt/counters/shift`
+
+**Заполняет:** `ShiftTotal…`, `ShiftNumber`, `CashBalance`.
 
 Получение счётчики за смену.
 
@@ -229,6 +250,8 @@
 
 ### `GetOverAll()`
 `GET kkt/counters/overall`
+
+**Заполняет:** `Overall…`, `NonZeroSum`, `CashBalance`.
 
 Коннектор кладёт `Result.Counters.Sales.Sum` в свойство `NonZeroSum`.
 
@@ -259,6 +282,8 @@
 ### `OpenShift()`
 `POST shift/open`
 
+**Заполняет:** `DocumentId`, `ShiftNumber`, `FnNumber`, `RnNumber`, `FnsUrl`, `ServerDateTime`, `Device…`, `IsFiscal`; выходные параметры: `CurrentShiftState`, `CheckNumber`, `CheckNumberInShift`, `ShiftDocumentsCount`, `ShiftClosingCheckNumber`, `FiscalDateTime`, `DeviceDateTime`, `CashBalance`, `FnValidityDate`, `FnDaysResources`, `Backlog…`, `FnWarnings…`.
+
 Открытие кассовой смены.
 
 **Тело запроса**
@@ -288,6 +313,8 @@
 ### `OpenShiftAsync()`
 `POST shift/open/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Открытие кассовой смены асинхронно.
 
 **Тело запроса**
@@ -304,6 +331,8 @@
 ### `CloseShift()`
 `POST shift/z`
 
+**Заполняет:** `DocumentId`, `ShiftNumber`, `FnNumber`, `RnNumber`, `FnsUrl`, `ServerDateTime`, `Device…`, `IsFiscal`; выходные параметры: `CurrentShiftState`, `CheckNumber`, `CheckNumberInShift`, `ShiftDocumentsCount`, `ShiftClosingCheckNumber`, `FiscalDateTime`, `DeviceDateTime`, `CashBalance`, `FnValidityDate`, `FnDaysResources`, `Backlog…`, `FnWarnings…`; `ShiftTotal…`, `Overall…`.
+
 Закрытие кассовой смены.
 
 **Тело запроса**
@@ -317,7 +346,7 @@
 | --- | --- | --- | --- | --- |
 | datetime | datetime | - | Время операции | "2026-05-12T18:38:52" |
 | deviceName | string | + | Имя устройства | "Atol" |
-| docId | string | + | Идентификатор документа Z-отчёта. Передайте в [GET shift/z](#getreportz), чтобы получить Z-отчёт. | "31f9d8a2-6424-4085-807c-a349d51884b1" |
+| docId | string | + | Идентификатор документа Z-отчёта. Передайте в [GET shift/z](#getcloseshift), чтобы получить Z-отчёт. | "31f9d8a2-6424-4085-807c-a349d51884b1" |
 | fnsUrl | string | - | Адрес сайта уполномоченного органа (ФНС) в сети «Интернет» | "nalog.ru" |
 | fnNumber | string | - | Номер фискального накопителя | "0123123123123" |
 | rnNumber | string | - | РНМ | "00031415926" |
@@ -331,6 +360,8 @@
 ### `CloseShiftAsync()`
 `POST shift/z/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Закрытие кассовой смены асинхронно.
 
 **Тело запроса**
@@ -342,10 +373,12 @@
 
 | **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
 | --- | --- | --- | --- | --- |
-| Result | string | + | Идентификатор документа Z-отчёта. Передайте в [GET shift/z](#getreportz), чтобы получить Z-отчёт. | "321581c0-2ebe-4f4e-bdf8-a932ad758dac" |
+| Result | string | + | Идентификатор документа Z-отчёта. Передайте в [GET shift/z](#getcloseshift), чтобы получить Z-отчёт. | "321581c0-2ebe-4f4e-bdf8-a932ad758dac" |
 
 ### `ReportX()`
 `POST shift/x`
+
+**Заполняет:** `DocumentId`, `ShiftNumber`, `FnNumber`, `RnNumber`, `FnsUrl`, `ServerDateTime`, `Device…`, `IsFiscal`; выходные параметры: `CurrentShiftState`, `CheckNumber`, `CheckNumberInShift`, `ShiftDocumentsCount`, `ShiftClosingCheckNumber`, `FiscalDateTime`, `DeviceDateTime`, `CashBalance`, `FnValidityDate`, `FnDaysResources`, `Backlog…`, `FnWarnings…`; `ShiftTotal…`, `Overall…`.
 
 Формирование X-отчёта (без закрытия смены)
 
@@ -374,6 +407,8 @@
 ### `ReportXAsync()`
 `POST shift/x/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Асинхронное формирование X-отчёта.
 
 **Тело запроса**
@@ -389,6 +424,8 @@
 
 ### `ReportSettlement()`
 `POST report/settlement`
+
+**Заполняет:** `DocumentId`, `ShiftNumber`, `FnNumber`, `RnNumber`, `FnsUrl`, `ServerDateTime`, `Device…`, `IsFiscal`; выходные параметры: `CurrentShiftState`, `CheckNumber`, `CheckNumberInShift`, `ShiftDocumentsCount`, `ShiftClosingCheckNumber`, `FiscalDateTime`, `DeviceDateTime`, `CashBalance`, `FnValidityDate`, `FnDaysResources`, `Backlog…`, `FnWarnings…`; `ShiftTotal…`, `Overall…`.
 
 Формирование отчета о текущем состоянии расчетов
 
@@ -418,6 +455,8 @@
 ### `ReportSettlementAsync()`
 `POST report/settlement/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Формирование отчета о текущем состоянии расчетов асинхронно
 
 **Тело запроса**
@@ -433,6 +472,8 @@
 
 ### `GetOpenShift()`
 `GET shift/open`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`; выходные параметры: `CurrentShiftState`, `CheckNumber`, `CheckNumberInShift`, `ShiftDocumentsCount`, `ShiftClosingCheckNumber`, `FiscalDateTime`, `DeviceDateTime`, `CashBalance`, `FnValidityDate`, `FnDaysResources`, `Backlog…`, `FnWarnings…`.
 
 Возвращает результат открытия смены по идентификатору документа (docId), полученному в [POST shift/open](#openshift)
 
@@ -479,6 +520,8 @@
 ### `GetReportX()`
 `GET shift/x`
 
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`; выходные параметры: `CurrentShiftState`, `CheckNumber`, `CheckNumberInShift`, `ShiftDocumentsCount`, `ShiftClosingCheckNumber`, `FiscalDateTime`, `DeviceDateTime`, `CashBalance`, `FnValidityDate`, `FnDaysResources`, `Backlog…`, `FnWarnings…`.
+
 Возвращает X-отчёт по идентификатору документа (docId), полученному в [POST shift/x](#reportx).
 
 **Параметры запроса**
@@ -521,8 +564,10 @@
 | ServerVersion | string | - | Версия сервера | "4.0.62.521" |
 | DeviceInfo | [DeviceInfo](#deviceinfo) | - | Данные о ККТ | "deviceInfo": {<br>"FfdVersion": "1.2",<br>"FnFfdVersion": "1.2",<br>"TimeZone": 7,<br>"KktLicenses": [],<br>"IsFiscal": true,<br>"LineLength": 64,<br>"LineLengthPixels": 512,<br>"DeviceClass": 4,<br>"Model": "РБ-Софт:Эмулятор ККМ",<br>"SerialNumber": "0020260207",<br>"FirmwareVersion": "2026",<br>"ConfigurationVersion": "02.07"<br>} |
 
-### `GetReportZ()`
+### `GetCloseShift()`
 `GET shift/z`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`; `ShiftTotal…`, `Overall…`; выходные параметры: `CurrentShiftState`, `CheckNumber`, `CheckNumberInShift`, `ShiftDocumentsCount`, `ShiftClosingCheckNumber`, `FiscalDateTime`, `DeviceDateTime`, `CashBalance`, `FnValidityDate`, `FnDaysResources`, `Backlog…`, `FnWarnings…`.
 
 Возвращает Z-отчёт по идентификатору документа (docId), полученному в [POST shift/z](#closeshift).
 
@@ -572,6 +617,8 @@
 ### `GetReportSettlement()`
 `GET report/settlement`
 
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`; `ShiftTotal…`, `Overall…`; выходные параметры: `CurrentShiftState`, `CheckNumber`, `CheckNumberInShift`, `ShiftDocumentsCount`, `ShiftClosingCheckNumber`, `FiscalDateTime`, `DeviceDateTime`, `CashBalance`, `FnValidityDate`, `FnDaysResources`, `Backlog…`, `FnWarnings…`.
+
 Возвращает отчёт о состоянии расчётов по идентификатору документа (docId), полученному в [POST report/settlement](#reportsettlement).
 
 **Параметры запроса**
@@ -612,8 +659,10 @@
 | Processed | bool | - | Признак удачного завершения обработки | true |
 | ServerVersion | string | - | Версия сервера | "4.0.62.521" |
 
-### `GetShiftList()`
+### `GetCloseShiftList()`
 `GET shift/z/list`
+
+**Заполняет:** `Shifts`.
 
 Получение списка Z-отчётов за период
 
@@ -627,6 +676,8 @@
 
 ### `GetOpenShiftList()`
 `GET shift/open/list`
+
+**Заполняет:** `Shifts`.
 
 Получение списка открытий смен за период
 
@@ -655,6 +706,8 @@
 ### `GetReportXList()`
 `GET shift/x/list`
 
+**Заполняет:** `Shifts`.
+
 Получение списка X-отчётов за период
 
 **Параметры запроса**
@@ -667,6 +720,8 @@
 
 ### `GetReportSettlementList()`
 `GET report/settlement/list`
+
+**Заполняет:** `Shifts`.
 
 Список отчётов о состоянии расчётов по устройству за период.
 
@@ -684,6 +739,8 @@
 
 ### `PrintCheck()`
 `POST check`
+
+**Заполняет:** `DocumentId`, `FiscalSign`, `CheckNumber`, `ShiftNumber`, `FnNumber`, `RnNumber`, `FnsUrl`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Печать чека.
 
@@ -735,6 +792,8 @@
 ### `PrintCheckAsync()`
 `POST check/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Асинхронно поставить фискальный чек в очередь печати.
 
 **Тело запроса**
@@ -750,6 +809,8 @@
 
 ### `GetCheck()`
 `GET check`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Возвращает результат операции по идентификатору документа (docId), полученному в POST-запросе.
 
@@ -780,7 +841,7 @@
 | TaxType | int | - | Код налогообложения (СНО): <br>0 — ОСН, <br>1 — УСН, <br>2 — УСНД_Р, <br>3 — ЕНВД, <br>4 — ЕСН, <br>5 — ПСН. | 1 |
 | IsReplaceTax | bool | - | Замена НДС | true |
 | TimeZone | int | - | Часовая зона: <br>0 — Авто; <br>1 — 1 часовая зона (МСК-1 / UTC+2); <br>2 — 2 часовая зона (МСК / UTC+3); <br>3 — 3 часовая зона (МСК+1 / UTC+4); <br>4 — 4 часовая зона (МСК+2 / UTC+5); <br>5 — 5 часовая зона (МСК+3 / UTC+6); <br>6 — 6 часовая зона (МСК+4 / UTC+7); <br>7 — 7 часовая зона (МСК+5 / UTC+8); <br>8 — 8 часовая зона (МСК+6 / UTC+9); <br>9 — 9 часовая зона (МСК+7 / UTC+10); <br>10 — 10 часовая зона (МСК+8 / UTC+11); <br>11 — 11 часовая зона (МСК+9 / UTC+12) | 2 |
-| ShiftNumber | int | + | Номер сессии. <br>Используется для [GET check/list](#getchecksbyshift) для получения списка чеков | 3 |
+| ShiftNumber | int | + | Номер сессии. <br>Используется для [GET check/list](#getchecklist) для получения списка чеков | 3 |
 | DocNumber | int | + | Номер фискального документа. <br>Используется для [GET check/fiscalSign](#getfiscalsign) для получения фискального признака | 5 |
 | DocNumberInShift | int | - | Номер фискального документа за смену | 1 |
 | FiscalSign | string | - | Фискальный признак документа | "4988644533" |
@@ -804,8 +865,10 @@
 | ServerVersion | string | - | Версия сервера | "4.0.62.521" |
 | DeviceInfo | [DeviceInfo](#deviceinfo) | - | Данные о ККТ | "DeviceInfo": { <br>"FfdVersion": "1.2", <br>"FnFfdVersion": "1.2", <br>"TimeZone": 7, <br>"KktLicenses": [], <br>"IsFiscal": true, <br>"LineLength": 64, <br>"LineLengthPixels": 576, <br>"DeviceClass": 4, <br>"Model": "АТОЛ FPrint-22ПТК", <br>"SerialNumber": "00106305393630", <br>"FirmwareVersion": "5.15.102", <br>"ConfigurationVersion": "5.17.0" <br>} |
 
-### `GetChecksByShift()`
+### `GetCheckList()`
 `GET check/list`
+
+**Заполняет:** `Checks` (те же списки: `Slips`, `CashIns`, `Corrections105`, `Corrections120`).
 
 Получение списка чеков за смену
 
@@ -823,15 +886,12 @@
 **Result (Check[])**
 Смотрите документацию [GET check](#getcheck)
 
-### `GetCheckList()`
-`GET check/list`
-
-Тот же эндпоинт, что и `GetChecksByShift`, но с произвольным набором фильтров запроса.
-
 ### `PrintCheckCopy()`
-`POST check/copy` (по `DocumentId`) либо `POST check/copy/last` (если `DocumentId` пуст)
+`POST check/copy`
 
-Печать копии чека по его идентификатору документа. 
+**Заполняет:** только статус.
+
+Печать копии чека по `DocumentId` (Guid документа или ФП чека).
 
 **Тело запроса**
 
@@ -842,50 +902,47 @@
 
 **Тело ответа**
 
-**Result (Check)**
+Только статус (`Code`, `Description`, `Success`), без `Result`.
+
+### `PrintLastCheckCopy()`
+`POST check/copy/last`
+
+**Заполняет:** только статус.
+
+Печать копии последнего чека на кассе `DeviceName`.
+
+**Параметры запроса**
+
+| **Имя параметра** | **Тип** | **Обяз** | **Назначение** | **Пример** |
+| --- | --- | --- | --- | --- |
+| device | string | + | Имя устройства | Atol |
+
+**Тело ответа**
+
+Только статус (`Code`, `Description`, `Success`), без `Result`.
+
+### `PrintCheckCopyFn()`
+`POST check/copy/fn`
+
+**Заполняет:** только статус.
+
+Печать копии чека из ФН по `DocumentId` (Guid документа или ФП чека). Выполняется только на ККТ исходного чека.
+
+**Тело запроса**
 
 | **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
 | --- | --- | --- | --- | --- |
-| CheckItems | [CheckItem](#checkitem)[] | - | Позиции чека. | "CheckItems": [ <br>  {<br>"Name": "Бутылка с водой 1л.", <br>"Quantity": 1, <br>"Price": 50, <br>"Department": 0, <br>"Sum": 50, <br>"IsFiscal": true, <br>"TaxValue": 20, <br>"PaymentMode": 3, <br>"ItemType": 10, <br>"ExciseAmount": 0, <br>"MeasureOfQuantity": 20 <br>} <br>], |
-| TrustedInFn | bool | - | Подтвержден в ФН | false |
-| Change | decimal | - | Сдача | 0.0 |
-| Sum | decimal | - | Сумма с учетом скидки | 50.0 |
-| OperationOnline | bool | - | Признак применения ККТ при осуществлении расчета в безналичном порядке в сети "Интернет" | true |
-| ClientContact | string | - | Номер телефона или электронная почта клиента | "kuznicov@mail.ru" |
-| CustomerDetail | [CustomerDetail](#customerdetail) | - | Cведения о покупателе (клиенте) | "CustomerDetail": {<br>"Info": "ООО 'Рога и Копыта'", <br>"Vatin": "500100732259", <br>"Email": "kuznicov@mail.ru" <br>}, |
-| QrData | [QrCheckData](#qrcheckdata) | - | Данные для отображения QR кода чека | "QrData": { <br>"Date": "2026-05-24T12:52:00+08:00", <br>"Amount": 50, <br>"Fn": "9999078902010507", <br>"Fd": 370, <br>"Fp": "2928907410",<br>"N": 1 <br>}, |
-| Payments | [Payments](#payments) | - | Оплаты | "Payments": { <br>"Cash": 50, <br>"Electronic": 0, <br>"PrePaid": 0, <br>"Credit": 0, <br>"Barter": 0 <br>}, |
-| DocumentHeader | - | DocumentHeader | Заголовок документа | "DocumentHeader": { <br>"OrganizationInfo": "ООО 'Ромашка'", <br>"SerialNumber": "00106305393630", <br>"Vatin": "7722345678", <br>"Cashier": "Иванов А.И.", <br>"RnNumber": "0000000002005725", <br>"Fn": "9999078902010507", <br>"FnsUrl": "nalog.ru", <br>"ShiftNumber": 41, <br>"DocNumber": 370, <br>"FiscalSign": "2928907410", <br>"OfdOrganizationName": "Тестовый ОФД", <br>"OfdVatin": "7709364346" <br>}, |
-| Electronically | bool | - | Регистрация чека без печати на ленте | false |
-| IsFiscal | bool | - | Фискальный | true |
-| TaxType | int | - | Код налогообложения (СНО): <br>0 — ОСН, <br>1 — УСН, <br>2 — УСНД_Р, <br>3 — ЕНВД, <br>4 — ЕСН, <br>5 — ПСН. | 1 |
-| IsReplaceTax | bool | - | Замена НДС | true |
-| TimeZone | int | - | Часовая зона: <br>0 — Авто; <br>1 — 1 часовая зона (МСК-1 / UTC+2); <br>2 — 2 часовая зона (МСК / UTC+3); <br>3 — 3 часовая зона (МСК+1 / UTC+4); <br>4 — 4 часовая зона (МСК+2 / UTC+5); <br>5 — 5 часовая зона (МСК+3 / UTC+6); <br>6 — 6 часовая зона (МСК+4 / UTC+7); <br>7 — 7 часовая зона (МСК+5 / UTC+8); <br>8 — 8 часовая зона (МСК+6 / UTC+9); <br>9 — 9 часовая зона (МСК+7 / UTC+10); <br>10 — 10 часовая зона (МСК+8 / UTC+11); <br>11 — 11 часовая зона (МСК+9 / UTC+12) | 2 |
-| ShiftNumber | int | + | Номер сессии. <br>Используется для [GET check/list](#getchecksbyshift) для получения списка чеков | 3 |
-| DocNumber | int | + | Номер фискального документа. <br>Используется для [GET check/fiscalSign](#getfiscalsign) для получения фискального признака | 5 |
-| DocNumberInShift | int | - | Номер фискального документа за смену | 1 |
-| FiscalSign | string | - | Фискальный признак документа | "4988644533" |
-| Fn | string | - | Серийный номер фискального накопителя | "0123123123123" |
-| FiscalDate | DateTime | - | Время регистрации операции по часам ККМ. | "2026-05-24T00:11:23.5505769+08:00" |
-| SaleAddress | string | - | Адрес проведения расчетов | "г.Улан-Удэ, ул.Виноградная, д11А, офис 25" |
-| SaleLocation | string | - | Место проведения расчетов | "Офис" |
-| FfdVersion | string | - | Версия ФФД | "1.2" |
-| Tlv | string | - | Cтруктура значений тегов документа | "1209,Номер версии ФФД:4\\r\\n1041,Номер ФН:999907890..." |
-| Lines | [PrintLine](#printline)[] | - | Строки печати | "Lines": [ <br>{ <br>"Type": 1, <br>"Width": 0, <br>"Scale": 100, <br>"Line": "Кассовый чек", <br>"LineRight": "", <br>"Alignment": 1, <br>"Font": 0, <br>"Wrap": true, <br>"IsCreateFromTemplate": false <br>}, <br>{ <br>"Type": 1, <br>"Width": 0, <br>"Scale": 100, <br>"Line": "СМЕНА 41", <br>"LineRight": "ЧЕК 20", <br>"Alignment": 0, <br>"Font": 0, <br>"Wrap": true, <br>"IsCreateFromTemplate": false <br>} <br>]|
-| TaskType | int | - | Тип чека: <br>0 — Текст, <br>1 — Приход, <br>2 — Возврат прихода, <br>3 — Расход, <br>4 — Возврат расхода, <br>5 — Коррекция прихода, <br>6 — Коррекция возврата прихода, <br>7 — Коррекция расхода, <br>8 — Коррекция возврата расхода, <br>9 — Слип, <br>10 — Фискализация, <br>11 — Открытие смены, <br>12 — Z-отчет, <br>13 — X-отчет, <br>14 — Отчет о состоянии расчетов, <br>20 — Выемка, <br>21 — Внесение, <br>22 — Открытие денежного ящика, | 11 |
-| DocId | string | - | Идентификатор документа чека. Передайте в GET-запрос, чтобы получить результат операции | "7ccfb3d4-bc93-40c7-9e4d-aa1c8b0261b6" |
-| Date | DateTime | - | Дата создания документа | "2026-05-24T00:11:23.5221437+08:00" |
-| TerminalId | string | - | Идентификатор терминала, с которго пришел документ | "" |
-| DeviceName | string | - | Имя устройства | "Atol" |
-| PoolId | string | - | Пул, который назначен чеку | "" |
-| ResultCode | int | - | Результат | 0 |
-| ResultDescription | string | - | Описания результата | "OK" |
-| Processed | bool | - | Признак удачного завершения обработки | true |
-| ServerVersion | string | - | Версия сервера | "4.0.62.521" |
-| DeviceInfo | [DeviceInfo](#deviceinfo) | - | Данные о ККТ | "DeviceInfo": { <br>"FfdVersion": "1.2", <br>"FnFfdVersion": "1.2", <br>"TimeZone": 7, <br>"KktLicenses": [], <br>"IsFiscal": true, <br>"LineLength": 64, <br>"LineLengthPixels": 576, <br>"DeviceClass": 4, <br>"Model": "АТОЛ FPrint-22ПТК", <br>"SerialNumber": "00106305393630", <br>"FirmwareVersion": "5.15.102", <br>"ConfigurationVersion": "5.17.0" <br>} |
+| DocId | string | + | Guid документа или фискальный признак (ФП) чека | "855fa6cb-5e05-4983-8e39-de5187ac7a21" |
+| DeviceName | string | – | Имя устройства | "Atol" |
+
+**Тело ответа**
+
+Только статус (`Code`, `Description`, `Success`), без `Result`.
 
 ### `GetFiscalSign()`
 `GET check/fiscalSign`
+
+**Заполняет:** `FiscalSign`.
 
 Получение фискального признака (ФП) по номеру фискального документа (ФД)
 
@@ -906,6 +963,8 @@
 
 ### `GetTaskStatus()`
 `GET task/status`
+
+**Заполняет:** `TaskStatus…`, `DocumentId`, `FiscalSign`, `CheckNumber`, `ShiftNumber`.
 
 Возвращает статус выполнения задания по идентификатору документа (docId), полученному в ответе на любой POST-запрос.
 
@@ -938,6 +997,8 @@
 
 ### `GetPrintForm()`
 `GET task/form`
+
+**Заполняет:** `PrintForm`.
 
 Возвращает печатную форму документа по его идентификатору (docId), полученному в ответе на любой POST-запрос.
 
@@ -974,6 +1035,8 @@
 ### `PrintCheckCorrection120()`
 `POST correction120`
 
+**Заполняет:** `DocumentId`, `FiscalSign`, `CheckNumber`, `ShiftNumber`, `FnNumber`, `RnNumber`, `FnsUrl`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
+
 Печать чека коррекции для ФФД 1.2
 
 **Тело запроса**
@@ -987,6 +1050,8 @@
 ### `PrintCheckCorrection120Async()`
 `POST correction120/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Асинхронно печатает чек коррекции для ФФД 1.2
 
 **Тело запроса**
@@ -998,10 +1063,12 @@
 
 | **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
 | --- | --- | --- | --- | --- |
-| Result | string | + | Идентификатор документа чека коррекции ФФД 1.2. Передайте в [GET correction120](#getcorrection120), чтобы получить чек коррекции ФФД 1.2. | "cbac9c78-c4f5-4f03-8be9-696136ebc9ab" |
+| Result | string | + | Идентификатор документа чека коррекции ФФД 1.2. Передайте в [GET correction120](#getcheckcorrection120), чтобы получить чек коррекции ФФД 1.2. | "cbac9c78-c4f5-4f03-8be9-696136ebc9ab" |
 
 ### `PrintCheckCorrection105()`
 `POST correction105`
+
+**Заполняет:** `DocumentId`, `FiscalSign`, `CheckNumber`, `ShiftNumber`, `FnNumber`, `RnNumber`, `FnsUrl`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Печать чека коррекции для ФФД 1.05
 
@@ -1041,6 +1108,8 @@
 ### `PrintCheckCorrection105Async()`
 `POST correction105/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Асинхронно ставит печать чека коррекции для ФФД 1.0.5
 
 **Тело запроса**
@@ -1052,10 +1121,12 @@
 
 | **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
 | --- | --- | --- | --- |
-| Result | string | + | Идентификатор документа чека коррекции ФФД 1.0.5. Передайте в [GET correction105](#getcorrection105), чтобы получить чек коррекции. | "cbac9c78-c4f5-4f03-8be9-696136ebc9ab" |
+| Result | string | + | Идентификатор документа чека коррекции ФФД 1.0.5. Передайте в [GET correction105](#getcheckcorrection105), чтобы получить чек коррекции. | "cbac9c78-c4f5-4f03-8be9-696136ebc9ab" |
 
-### `GetCorrection120()`
+### `GetCheckCorrection120()`
 `GET correction120`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Возвращает чек коррекции ФФД 1.2 по идентификатору документа (docId), полученному в [POST correction120](#printcheckcorrection120).
 
@@ -1117,8 +1188,10 @@
 | ServerVersion | string | - | Версия сервера | "4.0.62.521" |
 | DeviceInfo | [DeviceInfo](#deviceinfo) | - | Данные о ККТ | "DeviceInfo": {<br>"FfdVersion": "1.0.5",<br>"FnFfdVersion": "1.0.5",<br>"IsFiscal": true,<br>"LineLength": 42,<br>"DeviceClass": 4,<br>"Model": "АТОЛ 1Ф",<br>"SerialNumber": "00109325182732",<br>"FirmwareVersion": "5.8.1",<br>"ConfigurationVersion": "5.8.17"<br>} |
 
-### `GetCorrection120List()`
+### `GetCheckCorrection120List()`
 `GET correction120/list`
+
+**Заполняет:** `Checks` (те же списки: `Slips`, `CashIns`, `Corrections105`, `Corrections120`).
 
 Получение списка чеков коррекции ФФД 1.2
 
@@ -1133,10 +1206,12 @@
 **Result**
 
 **Тип: (CheckCorrection120[])**
-Смотрите документацию [GET correction120](#getcorrection120)
+Смотрите документацию [GET correction120](#getcheckcorrection120)
 
-### `GetCorrection105()`
+### `GetCheckCorrection105()`
 `GET correction105`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Возвращает чек коррекции ФФД 1.0.5 по идентификатору документа (docId), полученному в [POST correction105](#printcheckcorrection105).
 
@@ -1197,8 +1272,10 @@
 | ServerVersion | string | - | Версия сервера | "4.0.62.521" |
 | DeviceInfo | [DeviceInfo](#deviceinfo) | - | Данные о ККТ | "DeviceInfo": {<br>"FfdVersion": "1.0.5",<br>"FnFfdVersion": "1.0.5",<br>"IsFiscal": true,<br>"LineLength": 42,<br>"DeviceClass": 4,<br>"Model": "АТОЛ 1Ф",<br>"SerialNumber": "00109325182732",<br>"FirmwareVersion": "5.8.1",<br>"ConfigurationVersion": "5.8.17"<br>} |
 
-### `GetCorrection105List()`
+### `GetCheckCorrection105List()`
 `GET correction105/list`
+
+**Заполняет:** `Checks` (те же списки: `Slips`, `CashIns`, `Corrections105`, `Corrections120`).
 
 Получение списка чеков коррекции ФФД 1.05
 
@@ -1211,7 +1288,7 @@
 **Тело ответа**
 
 **Result (CheckCorrection105[])**
-Смотрите документация [GET correction105](#getcorrection105)
+Смотрите документация [GET correction105](#getcheckcorrection105)
 
 ---
 
@@ -1219,6 +1296,8 @@
 
 ### `CashIn()`
 `POST cashin`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Регистрация операции внесения наличных в денежный ящик.
 
@@ -1265,6 +1344,8 @@
 ### `CashInAsync()`
 `POST cashin/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Асинхронно поставить операцию внесения наличных в очередь
 
 **Тело запроса**
@@ -1280,6 +1361,8 @@
 
 ### `CashOut()`
 `POST cashout`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Регистрация операции выемки наличных из денежного ящика.
 
@@ -1325,6 +1408,8 @@
 ### `CashOutAsync()`
 `POST cashout/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Асинхронно регистрирует операцию выемки наличных в очередь
 
 **Тело запроса**
@@ -1340,6 +1425,8 @@
 
 ### `OpenCashdrawer()`
 `POST cash/open`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Открытие денежного ящика
 
@@ -1384,6 +1471,8 @@
 ### `GetCash()`
 `GET cash`
 
+**Заполняет:** `CashBalance`.
+
 Коннектор кладёт `Result.Sum` в свойство `CashBalance`.
 
 Получение остатка наличных в денежном ящике
@@ -1405,6 +1494,8 @@
 ### `GetCashIn()`
 `GET cashin`
 
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
+
 Возвращает результат операции внесения наличных по идентификатору операции (docId), полученному в [POST cashin](#cashin).
 
 **Параметры запроса**
@@ -1421,6 +1512,8 @@
 ### `GetCashInList()`
 `GET cashin/list`
 
+**Заполняет:** `Checks` (те же списки: `Slips`, `CashIns`, `Corrections105`, `Corrections120`).
+
 Получение списка операций внесения наличных по имени устройства.
 
 **Параметры запроса**
@@ -1436,6 +1529,8 @@
 
 ### `GetCashOut()`
 `GET cashout`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Возвращает результат операции выемки наличных по идентификатору операции (docId), полученному в [POST cashout](#cashout).
 
@@ -1456,6 +1551,8 @@
 
 ### `PrintSlip()`
 `POST slip`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Печатать нефискального документа
 
@@ -1496,6 +1593,8 @@
 ### `PrintSlipAsync()`
 `POST slip/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Асинхронно поставить нефискальный документ в очередь печати и получить идентификатор задачи.
 
 **Тело запроса**
@@ -1511,6 +1610,8 @@
 
 ### `GetSlip()`
 `GET slip`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Возвращает нефискальный документ по идентификатору документа (docId), полученный в [POST slip](#printslip).
 
@@ -1551,6 +1652,8 @@
 ### `GetSlipList()`
 `GET slip/list`
 
+**Заполняет:** `Checks` (те же списки: `Slips`, `CashIns`, `Corrections105`, `Corrections120`).
+
 Получение списка нефискальных документов
 
 **Параметры запроса**
@@ -1570,6 +1673,8 @@
 
 ### `SendPicture()`
 `POST picture`
+
+**Заполняет:** только статус.
 
 Загрузка изображения в выбранную ККТ
 
@@ -1593,6 +1698,8 @@
 ### `GetPicture()`
 `GET picture`
 
+**Заполняет:** `PictureBase64Result`.
+
 Получение изображения 
 
 **Параметры запроса**
@@ -1612,6 +1719,8 @@
 
 ### `GetPictureList()`
 `GET picture/list`
+
+**Заполняет:** `Pictures`.
 
 Получение списка изображений
 
@@ -1640,6 +1749,8 @@
 ### `DeletePicture()`
 `DELETE picture`
 
+**Заполняет:** только статус.
+
 Удаление картинки с устройства
 
 **Параметры запроса**
@@ -1655,6 +1766,8 @@
 
 ### `AddTemplate()`
 `POST template`
+
+**Заполняет:** `TemplateName` (имя, присвоенное сервером).
 
 Создание печатного шаблона
 
@@ -1677,6 +1790,8 @@
 ### `UpdateTemplate()`
 `PUT template`
 
+**Заполняет:** только статус.
+
 Редактирование печатного шаблона по его уникальному названию (Name)
 
 **Тело запроса**
@@ -1684,6 +1799,8 @@
 
 ### `DeleteTemplate()`
 `DELETE template`
+
+**Заполняет:** только статус.
 
 Удаление шаблона по названию
 
@@ -1695,6 +1812,8 @@
 
 ### `GetTemplateList()`
 `GET template/list`
+
+**Заполняет:** `Templates` (`TemplateNames`).
 
 Получение списка печатных шаблонов
 
@@ -1708,6 +1827,8 @@
 
 ### `GetTemplate()`
 `GET template`
+
+**Заполняет:** `PrintTemplate…`, `TemplateName`, `TemplateType`, `TemplateLines`; строки шаблона восстанавливаются во входные позиции.
 
 Получение печатного шаблона
 
@@ -1734,6 +1855,8 @@
 ### `AddCheckTemplate()`
 `POST checkTemplate`
 
+**Заполняет:** только статус.
+
 Создание нового шаблона чека
 
 **Тело запроса**
@@ -1749,6 +1872,8 @@
 ### `UpdateCheckTemplate()`
 `PUT checkTemplate`
 
+**Заполняет:** только статус.
+
 Редактирование шаблона чека
 
 **Тело запроса**
@@ -1756,6 +1881,8 @@
 
 ### `DeleteCheckTemplate()`
 `DELETE checkTemplate`
+
+**Заполняет:** только статус.
 
 Удаление шаблона чека по имени
 
@@ -1768,6 +1895,8 @@
 
 ### `GetCheckTemplateList()`
 `GET checkTemplate/list`
+
+**Заполняет:** `CheckTemplates`.
 
 Получение списка шаблонов чека
 
@@ -1782,6 +1911,8 @@
 
 ### `GetCheckTemplate()`
 `GET checkTemplate`
+
+**Заполняет:** `CheckTemplate…`, `TemplateName`; документ шаблона восстанавливается во входные свойства чека (позиции, оплаты, СНО, адрес).
 
 Получение шаблона чека по имени
 
@@ -1807,6 +1938,8 @@
 ### `OpenSessionRegistrationKM()`
 `POST marking/session/open`
 
+**Заполняет:** только статус.
+
 Открытие сессии регистрации (проверки) кодов маркировки на ККТ.
 
 **Тело запроса**
@@ -1828,6 +1961,8 @@
 ### `CloseSessionRegistrationKM()`
 `POST marking/session/close`
 
+**Заполняет:** только статус.
+
 Закрытие сессии регистрации (проверки) кодов маркировки на ККТ.
 
 **Тело запроса**
@@ -1840,6 +1975,8 @@
 
 ### `RequestKM()`
 `POST marking/km/request`
+
+**Заполняет:** `MarkingCheck…`, `RequestKmGuid` (если не задан — создаётся перед запросом).
 
 Локальная проверка кода маркировки на ККТ (ФФД 1.2).
 
@@ -1866,6 +2003,8 @@
 ### `GetProcessingKMResult()`
 `GET marking/km/result`
 
+**Заполняет:** `MarkingProcessing…`, `RequestKmGuid`.
+
 Получение результата проверки кода маркировки в ОИСМ.
 
 **Параметры запроса**
@@ -1890,6 +2029,8 @@
 ### `ConfirmKM()`
 `POST marking/km/confirm`
 
+**Заполняет:** только статус.
+
 Подтверждение, будет ли ранее проверенный код маркировки фактически включён в документ реализации. Подтверждение действительно только в рамках открытой сессии регистрации кодов маркировки.
 
 **Тело запроса**
@@ -1907,6 +2048,8 @@
 
 ### `VerifyMarking()`
 `POST marking/km/verify`
+
+**Заполняет:** `Marking…` (`MarkingCodesInfo`, `MarkingResult…`, `MarkingReq…`, `MarkingLast…`).
 
 Проверка кодов маркировки. Метод проверки выбирается в настройках устройства, во вкладке "Маркировка", категория "Способ проверки маркировки". <br><br> Если выбрана проверка "Автоматически", сервер последовательно пробует ТС ПИоТ (если для устройства настроен адрес), затем ГИС МТ (если настроена учётная запись ОФД), затем локальный модуль ЧЗ (если он готов), и использует первый доступный способ. <br><br>По умолчанию используется ГИС МТ и ЛМ ЧЗ. 
 
@@ -1936,6 +2079,8 @@
 ### `VerifyMarkingTsPiot()`
 `POST marking/km/tspiot/verify`
 
+**Заполняет:** `Marking…` (`MarkingCodesInfo`, `MarkingResult…`, `MarkingReq…`, `MarkingLast…`).
+
 Проверка кодов маркировки через ТС ПИоТ. <br><br>Для работы запроса на устройстве должен быть настроен адрес ТС ПИоТ
 
 **Тело запроса**
@@ -1948,6 +2093,8 @@
 
 ### `VerifyMarkingLmcz()`
 `POST marking/km/lmcz/verify`
+
+**Заполняет:** `Marking…` (`MarkingCodesInfo`, `MarkingResult…`, `MarkingReq…`, `MarkingLast…`).
 
 Проверка кодов маркировки через локальный модуль "Честного Знака" (ЛМ ЧЗ).
 
@@ -1980,6 +2127,8 @@
 
 ### `Fiscalization()`
 `POST fiscalization`
+
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`.
 
 Выполнение фискализации
 
@@ -2093,6 +2242,8 @@
 ### `FiscalizationAsync()`
 `POST fiscalization/async`
 
+**Заполняет:** `DocumentId` — идентификатор задания; результат — через `GetTaskStatus` или `Get…` по этому docId.
+
 Асинхронно поставить операцию фискализации в очередь
 
 **Тело запроса**
@@ -2109,6 +2260,8 @@
 ### `GetFiscalization()`
 `GET fiscalization`
 
+**Заполняет:** документ: свойства `Check…`, `DocumentId`, `FiscalSign`, `FnNumber`, `RnNumber`, `FnsUrl`, `ShiftNumber`, `CheckNumber`, `CheckNumberInShift`, `CashBalance`, `PrintForm`, `ServerDateTime`, `FiscalDateTime`, `DeviceDateTime`, `Device…`, `IsFiscal`; `FiscalizationResult…`, `RnNumber`, `IsFiscal`.
+
 Возвращает результат фискализации по идентификатору документа (docId), полученному в [POST fiscalization](#fiscalization).
 
 **Параметры запроса**
@@ -2124,6 +2277,8 @@
 
 ### `GetFiscalizationList()`
 `GET fiscalization/list`
+
+**Заполняет:** `Fiscalizations`.
 
 Получение списка операций фискализации по устройству.
 
@@ -2144,6 +2299,8 @@
 
 ### `GetQueue()`
 `GET queue`
+
+**Заполняет:** `Queue`.
 
 Получение текущего списка заданий, находящихся в очереди обработки сервера.
 
@@ -2166,6 +2323,8 @@
 
 ### `GetQueueTask()`
 `GET queue/task`
+
+**Заполняет:** `QueueTask…`.
 
 Получение актуального статуса задачи в очереди
 
@@ -2199,6 +2358,8 @@
 ### `GetQueueTaskHistory()`
 `GET queue/task/history`
 
+**Заполняет:** `QueueTask…`, `OperationHistory`.
+
 Получение истории событий обработки конкретного задания в очереди
 
 **Параметры запроса**
@@ -2217,6 +2378,8 @@
 
 ### `CancelQueueTask()`
 `DELETE queue/task`
+
+**Заполняет:** только статус.
 
 Удаление задания из очереди
 
@@ -2246,6 +2409,8 @@
 
 ### `GetOperationLast()`
 `GET operation/last`
+
+**Заполняет:** `Operation…`, `DocumentId`.
 
 Последняя операция из базы сервера с учётом фильтров.
 
@@ -2306,6 +2471,8 @@
 ### `GetOperation()`
 `GET operation`
 
+**Заполняет:** `Operation…`, `DocumentId`.
+
 Операция по идентификатору документа.
 
 **Параметры запроса**
@@ -2319,6 +2486,8 @@
 
 ### `GetOperationHistory()`
 `GET operation/history`
+
+**Заполняет:** `OperationHistory`.
 
 История обработки операции (постановка в очередь, отправка на ККТ, результат).
 
@@ -2342,6 +2511,8 @@
 ### `GetOperationTlv()`
 `GET operation/tlv`
 
+**Заполняет:** `OperationTlv`.
+
 TLV-представление документа
 
 **Параметры запроса**
@@ -2358,6 +2529,8 @@ TLV-представление документа
 
 ### `GetOperationKm()`
 `GET operation/km`
+
+**Заполняет:** `OperationKm`.
 
 Журнал кодов маркировки операции. Результат — в свойстве `OperationKm`.
 Пустой массив, если в операции нет кодов маркировки.
@@ -2390,6 +2563,8 @@ TLV-представление документа
 ### `GetOperationRelated()`
 `GET operation/related`
 
+**Заполняет:** `RelatedOperations`.
+
 Связанные операции (например, приход и его возврат)
 
 **Параметры запроса**
@@ -2406,6 +2581,8 @@ TLV-представление документа
 
 ### `GetOperationList()`
 `GET operation/list`
+
+**Заполняет:** `Operations`.
 
 Список операций за период
 
@@ -2449,39 +2626,10 @@ TLV-представление документа
 
 ## Администрирование ККТ
 
-### `AddDevice()`
-`POST kkt`
-
-Добавление устройства ККТ.
-
-**Тело запроса**
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| DeviceName | string | + | Имя устройства | "Atol" |
-| Settings      | [DeviceSettings](#devicesettings)  | +        | Настройки устройства. Обязателен к передаче, но отдельные поля внутри необязательны | "Settings": {<br>"DeviceType": 1,<br>"Available": true,<br>"DeviceName": "MyKkt054",<br>"MethodConnection": 0,<br>"PortNumber": 1,<br>"BaudRate": 9600,<br>"IpAddress": "192.168.0.109",<br>"TcpPort": 7778,<br>"Password": "30",<br>"SerialNumber": "0392790042005043",<br>"SenderEmail": "noreply@example.com",<br>"Cashier": "Иванов А.И.",<br>"CashierVatin": "7722345678",<br>"Vatin": "7700000000",<br>"OrganizationName": "ООО Ромашка",<br>"SaleAddress": "г. Москва, ул. Пример, д. 1",<br>"ClientSaleLocation": "Торговый зал",<br>"TimeoutConnection": 5000,<br>"TimeoutWaitForPrinting": 60000,<br>"OfdAddress": "ofd.example.ru",<br>"OfdPort": 7777<br>} |
-
-### `UpdateDevice()`
-`PUT kkt`
-
-Редактирование параметров устройства ККТ.
-
-**Тело запроса**
-Смотрите документацию [POST kkt](#adddevice)
-
-### `DeleteDevice()`
-`DELETE kkt`
-
-Удаление устройства ККТ
-
-**Параметры запроса**
-
-| **Имя параметра** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| DeviceName | string | + | Имя устройства. | Atol |
-
 ### `RebootDevice()`
 `POST kkt/reboot`
+
+**Заполняет:** только статус.
 
 Перезагрузка устройства.
 
@@ -2491,187 +2639,11 @@ TLV-представление документа
 | --- | --- | --- | --- | --- |
 | DeviceName | string | + | Имя устройства | "Atol" |
 
-### `SetDeviceFont()`
-`POST kkt/font/setting`
 
-Редактирование настроек шрифта шаблона для устройства.
-
-**Тело запроса**
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| DeviceName | string | + | Имя устройства | "Atol" |
-| Settings       | [DeviceSettings](#devicesettings)  | + | Настройки шрифта шаблона. | "Settings": {<br>"Name": "lines2",<br>"TemplateSettingH1": "1",<br>"TemplateSettingH2": "1",<br>"TemplateSettingH3": "2",<br>"TemplateSettingH4": "2",<br>"TemplateSettingH5": "2"<br>} |
-
----
-
-## Служба
-
-### `GetServiceSettings()`
-`GET service/settings`
-
-Получение настроек службы
-
-**Тело ответа**
-
-**Result (ServiceSettings)**
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| WcfServicePort | int | - | Порт, на котором работает WCF-служба и принимает REST API запросы. <br><br>Если значение не удаётся прочитать из настроек сервера, возвращается значение по умолчанию — 4398. | 4398 |
-| WebServicePort | int | - | Порт, на котором работает веб-страница администрирования сервера (добавление и настройка ККТ, редактирование рекламных шаблонов, просмотр очереди печати). Это тот адрес, который открывают в браузере. <br><br>Если значение не удаётся прочитать из настроек сервера, возвращается значение по умолчанию — 8866. | 8866 |
-| ServiceTimeOut | TimeSpan | - | Таймаут обработки запросов. <br><br>Если значение не удаётся прочитать из настроек сервера, возвращается `"00:00:00"`, без явной пометки ошибки.  | "00:00:15" |
-| MaxQueueSize | int | - | Максимальный размер очереди заданий. <br><br>Если значение не удаётся прочитать из настроек сервера, возвращается значение по умолчанию — 100. | 100 |
-| RepeatPrintingOnError | bool | - | Повторять печать при ошибке/перезапуске. <br><br>Если значение не удаётся прочитать из настроек сервера, возвращается значение по умолчанию `false`. | false |
-| ProxyServerSettings | [ProxyConfig](#proxyconfig) | - | Конфигурация прокси сервера | "ProxyServerSettings": {<br>"IsUseProxy": false,<br>"IpAddress": "",<br>"Port": 0,<br>"Name": "",<br>"Password": ""<br>} |
-
-### `SaveServiceSettings()`
-`POST service/settings`
-
-Сохранение настроек служб
-
-**Тело запроса**
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| WcfServicePort | int | + | Порт, на котором работает WCF-служба и принимает REST API запросы. <br><br>Если указано значение 0 или поле не указано, текущее значение порта в настройках сервера не изменяется. | 4398 |
-| WebServicePort | int | + | Порт, на котором работает веб-страница администрирования сервера (добавление и настройка ККТ, редактирование рекламных шаблонов, просмотр очереди печати). Это тот адрес, который открывают в браузере. <br><br>Если указано значение 0 или поле не указано, текущее значение порта в настройках сервера не изменяется. | 8866 |
-| ServiceTimeOut | string | \- | Таймаут обработки запросов (hh:mm:ss). <br><br>Если поле не передано, будет сохранено значение `"00:00:00"` | "00:00:15" |
-| ProxyServerSettings | [ProxyConfig](#proxyconfig) | - | Конфигурация прокси сервера | "ProxyServerSettings": {<br>"IsUseProxy": false,<br>"IpAddress": "",<br>"Port": 0,<br>"Name": "",<br>"Password": ""<br>} |
-| MaxQueueSize | int | + | Максимальный размер очереди заданий. <br><br>Значение сохраняется, если поле не передано в запросе — в таком случае будет сохранено значение 0. | 100 |
-| RepeatPrintingOnError | bool | \- | Признак повторной печати задания при ошибке или перезапуске службы. <br><br>Значение сохраняется, если поле не передано в запросе — в этом случае будет сохранено значение `false`. | false |
-
----
-
-## Пользователи
-
-### `GetUserToken()`
-`GET user/token`
-
-Получение токена авторизации пользователя для вызова защищённых методов API.
-
-Логин и пароль передаются через Basic Auth: свойства `AuthUserName` и `AuthPassword`.
-По умолчанию на сервере учётка администратора — `Admin` / `Admin`.
-После успешного ответа токен записывается в `Token` и дальше уходит как `api_key`.
-
-**Тело ответа**
-
-**Result (Token)**
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| tokenId | string | + | Токен авторизации | "7aa6f555-69bb-41d9-b4aa-6b4d7e7e779e" |
-| expire | string | - | Срок действия. время в формате YYYYMMDhhmmss | "99991231235959" |
-
-### `GetUserList()`
-`GET user/list`
-
-Получение списка пользователей.
-
-**Тело ответа**
-
-**Result (User[])**
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| Id | string | + | идентификатор пользователя | "fab83a20-38fb-40ea-9fdf-6fd0befefd49" |
-| UserName | string | - | Логин | "Admin" |
-| FullName | string | - | Полное имя пользователя | "Администратор" |
-| Vatin | string | - | ИНН пользователя | "123456790" |
-| Role | int | + | Код роли пользователя.  <br>Значения:  <br>0 - Администратор,  <br>1 - Сотрудник | 0 |
-| TimeTokenCreation | datetime | - | время создания токена | "2026-02-14T22:52:24.2915473+08:00" |
-| TimeTokenDeletion | datetime | - | время удаления токена | "0001-01-01T00:00:00" |
-
-### `AddUser()`
-`POST user`
-
-Добавление пользователя.
-
-**Тело запроса**
-
-**Cashier**
-
-| Имя поля | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| UserName | string | + | Логин | "artem" |
-| Password | string | + | Пароль | "Admin" |
-| FullName | string | - | Полное имя пользователя | "Челпанов Артем" |
-| Vatin | string | - | ИНН пользователя | "12345679012" |
-| Role | int | + | код роли пользователя.  <br>Значения:  <br>0 - Администратор,  <br>1 - Сотрудник | 0 |
-
-### `UpdateUser()`
-`PUT user`
-
-Редактирование данных профиля пользователя.
-
-**Тело запроса**
-Смотрите документацию [POST user](#adduser).
-
-### `DeleteUser()`
-`DELETE user`
-
-Удаление пользователя
-
-| **Имя параметра** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| DocumentId | string | + | идентификатор пользователя | "83f43a79-027c-449e-ab97-c3f2a4b6e81c" |
-
----
 
 ## Типы данных
 
 ### Входные типы данных
-
-#### DeviceSettings
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| DeviceName | string | + | Имя устройства. Должно совпадать со значением поля **DeviceName**, указанным непосредственно в теле запроса. | "Atol" |
-| DeviceType | int | + | Тип драйвера: <br>1 — Shtrih; <br>2 — 1С(4.7); <br>3 — Atol; <br>4 — RrElectro; <br>5 — 1С(5.0); <br>100 — Эмулятор.  | 1 |
-| Available | bool | \- | Признак доступности устройства. Если указано значение `true`, сервер немедленно предпринимает попытку подключения к устройству. Если подключиться не удалось, значение автоматически сбрасывается в `false`, при этом запрос на добавление устройства всё равно завершается успешно. | true |
-| MethodConnection | int | + | Метод подключения: 0 — COM; <br>1 — TCP/IP | 0 |
-| PortNumber | int | \- | Номер COM-порта. <br>Обязателен при MethodConnection=0 | 1 |
-| BaudRate | int | \- | Скорость COM-порта. <br>Обязателен при MethodConnection=0 | 9600 |
-| IpAddress | string | \- | IP-адрес. <br>Обязателен при MethodConnection=1 | "192.168.0.109" |
-| TcpPort | int | \- | TCP-порт. <br>Обязателен при MethodConnection=1 | 7778 |
-| Password | string | + | Пароль устройства (пароль доступа к драйверу ККТ) | "30" |
-| AccessPassword                    | string     | - | Пароль доступа к настройкам устройства (не путать с паролем устройства **Password**) | "0000" |                               |
-| SerialNumber | string | \- | Серийный номер устройства | "0392790042005043" |
-| Vatin | string | \- | ИНН организации | "7722345678" |
-| OrganizationName | string | \- | Название организации | "ООО Ромашка" |
-| SaleAddress | string | \- | Адрес расчётов | "г.Улан-Удэ, ул.Виноградная, д11А, офис 25" |
-| ClientSaleLocation | string | \- | Место расчётов | "Офис" |
-| Cashier | string | \- | ФИО кассира по умолчанию | "Иванов А.И." |
-| CashierVatin | string | \- | ИНН кассира | "7722345678" |
-| SenderEmail | string | \- | Email отправителя чека | "ivanov@mail.ru" |
-| TimeoutConnection | int | \- | Таймаут подключения к устройству, в миллисекундах. <br><br>Если не указан или указано значение 0 — применяется значение по умолчанию, равное 5000 мс. | 5000 |
-| TimeoutWaitForPrinting | int | \- | Таймаут ожидания завершения печати, в миллисекундах. <br><br>Если не указан или указано значение 0 — применяется значение по умолчанию, равное 5000 мс. | 60000 |
-| OfdAddress | string | \- | Адрес ОФД | "ofd.example.ru" |
-| OfdPort | int | \- | Порт ОФД | 7777 |
-| Pool | string | \- | Имя пула, в который включается устройство. <br><br>Если не указано — устройство не входит ни в один пул. | "pool" |
-
-#### DeviceSettings
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| Name | string | + | Название шаблона | "lines2" |
-| TemplateSettingH1        | string   | - | Номер шрифта заголовка H1. Если не указано — ранее сохранённое значение стирается. | "1"          |
-| TemplateSettingH2        | string   | -  | Номер шрифта заголовка H2. Если не указано — ранее сохранённое значение стирается. | "1"          |
-| TemplateSettingH3        | string   | - | Номер шрифта заголовка H3. Если не указано — ранее сохранённое значение стирается. | "2"          |
-| TemplateSettingH4        | string   | -  | Номер шрифта заголовка H4. Если не указано — ранее сохранённое значение стирается. | "2"          |
-| TemplateSettingH5        | string   | -  | Номер шрифта заголовка H5. Если не указано — ранее сохранённое значение стирается. | "2"          |
-
-#### ProxyConfig
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| IsUseProxy               | bool     | -        | Признак использования прокси-сервера. <br><br>Если указано значение `true`, а поля **IsUseProxyService** и **IsUseProxyMarking** не переданы (или оба переданы как `false`), сервер принудительно устанавливает оба этих поля в `true` | false        |
-| IsUseProxyService        | bool     | -        | Признак использования прокси-сервера непосредственно для работы сервера ККМ       | false        |
-| IsUseProxyMarking        | bool     | -        | Признак использования прокси-сервера для обращения к сервисам проверки кодов маркировки | false |
-| IpAddress                | string   | -        | IP-адрес прокси-сервера                                                            | "193.148.21.111"           |
-| Port                     | int      | -        | Порт прокси-сервера                                                                | 67            |
-| Name | string   | -        | Логин доступа к прокси-серверу. <br><br>Если поле не передано, ранее сохранённый логин будет затёрт пустым значением. | "ProxyServer"  |
-| Password                 | string   | -        | Пароль доступа к прокси-серверу. <br><br>Если поле не передано, ранее сохранённый пароль будет затёрт пустым значением.| "ProxyPassword"           |
 
 #### Cashier
 
@@ -3200,18 +3172,6 @@ TLV-представление документа
 | TaxVat_105 | decimal | - | Ставка НДС 5/105 | 0 |
 | TaxVat_7 | decimal | - | Ставка НДС 7% | 0 |
 | TaxVat_107 | decimal | - | Ставка НДС 7/107 | 0 |
-
-#### ProxyConfig
-
-| **Имя поля** | **Тип** | **Обяз** | **Назначение** | **Пример** |
-| --- | --- | --- | --- | --- |
-| IsUseProxy | bool | - | Использовать прокси-сервер | false |
-| IsUseProxyService | bool | - | Использовать прокси-сервер для работы сервера ККМ | false |
-| IsUseProxyMarking | bool | - | Использовать прокси-сервер для работы с сервисами по проверки маркировки | false |
-| IpAddress | string | - | IP-адрес прокси | "193.148.21.111" |
-| Port | int | - | Порт прокси | 67 |
-| Name | string | - | Логин к прокси-серверу | "ProxyName" |
-| Password | string | - | Пароль к прокси-серверу | "ProxyPassword" |
 
 #### OutputParametersV4
 

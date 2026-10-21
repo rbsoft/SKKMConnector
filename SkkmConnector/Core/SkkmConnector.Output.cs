@@ -1,8 +1,5 @@
-using System.Text.Json;
-
 namespace RBSoftSkkm;
 
-// Выход: статус вызова, сырые объекты/списки ответа и скаляры фискального ответа.
 public sealed partial class SkkmConnector
 {
     /// <summary>
@@ -19,16 +16,6 @@ public sealed partial class SkkmConnector
     /// Текст ошибки сервера.
     /// </summary>
     public string ErrorDescription { get; private set; } = "";
-
-    /// <summary>
-    /// Поле Result ответа сервера.
-    /// </summary>
-    internal JsonElement Result { get; private set; }
-
-    /// <summary>
-    /// Фискальный блок ответа.
-    /// </summary>
-    internal FiscalResult? FiscalResult { get; private set; }
 
     /// <summary>
     /// Список устройств.
@@ -443,4 +430,84 @@ public sealed partial class SkkmConnector
     public int DeviceTimeZone { get; set; }
 
     #endregion
+
+    /// <summary>
+    /// Сбрасывает ВСЕ данные ответа (плоские поля и объекты), чтобы результат
+    /// каждого запроса отражал только сам себя и не оставался от предыдущего вызова.
+    /// Не трогает вход запроса (для него — <see cref="Clear"/>) и данные подключения.
+    /// </summary>
+    private void ResetResponse()
+    {
+        // Плоские скаляры ответа
+        FiscalSign = "";
+        FnNumber = "";
+        ShiftNumber = 0;
+        CheckNumber = 0;
+        CheckNumberInShift = 0;
+        RnNumber = "";
+        FnsUrl = "";
+        DocumentId = "";
+        ServerDateTime = "";
+        FiscalDateTime = "";
+        DeviceDateTime = "";
+        ComputerTime = default;
+        DeviceTime = default;
+        CurrentShiftState = null;
+        _backlog = null;
+        FnValidityDate = "";
+        FnDaysResources = 0;
+        IsFnPresent = false;
+        IsFiscal = false;
+        FnWarnings = null;
+        CashBalance = 0;
+        NonZeroSum = 0;
+        ShiftDocumentsCount = 0;
+        ShiftClosingCheckNumber = 0;
+        LineLength = 0;
+        LineLengthPixels = 0;
+        DeviceModel = "";
+        DeviceSerialNumber = "";
+        DeviceFirmwareVersion = "";
+        DeviceConfigurationVersion = "";
+        DeviceFfdVersion = "";
+        FnFfdVersion = "";
+        DeviceClass = default;
+        DeviceTimeZone = 0;
+
+        // Объекты ответа
+        Check = null;
+        Checks = [];
+        Shifts = [];
+        Status = null;
+        ShiftStatus = null;
+        ShiftTotals = null;
+        OverallTotals = null;
+        Kkt = null;
+        Devices = [];
+        Pictures = [];
+        PictureBase64Result = "";
+        TaskStatus = null;
+        PrintForm = [];
+        Pools = [];
+        Queue = [];
+        QueueTask = null;
+        Operation = null;
+        OperationHistory = [];
+        OperationTlv = "";
+        OperationKm = [];
+        RelatedOperations = [];
+        Operations = [];
+        PrintTemplate = null;
+        Templates = [];
+        CheckTemplate = null;
+        CheckTemplateDocument = null;
+        CheckTemplates = [];
+        FiscalizationDocument = null;
+        Fiscalizations = [];
+        MarkingCheck = null;
+        MarkingProcessing = null;
+        MarkingVerify = null;
+        ServerVersion = "";
+        ServerProduct = "";
+    }
 }

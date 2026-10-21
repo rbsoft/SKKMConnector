@@ -21,9 +21,9 @@ public sealed class QueueItem
     public string PoolId { get; set; } = "";
 
     /// <summary>
-    /// Признак отправки задания на устройство.
+    /// Состояние отправки задания на устройство (сервер: int).
     /// </summary>
-    public bool SentToPrint { get; set; }
+    public int SentToPrint { get; set; }
 
     /// <summary>
     /// Время постановки задания в очередь.
