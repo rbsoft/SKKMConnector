@@ -3,71 +3,46 @@ namespace RBSoftSkkm;
 public sealed partial class SkkmConnector
 {
 
-
     /// <summary>
     /// Начало периода отбора отчётов, чеков и операций
     /// </summary>
-    public DateTime ShiftsFrom { get; set; } = DateTime.Today.AddDays(-7);
+    public System.DateTime FromDate { get; set; } = System.DateTime.Today.AddDays(-7);
 
     /// <summary>
     /// Конец периода отбора отчётов, чеков и операций
     /// </summary>
-    public DateTime ShiftsTo { get; set; } = DateTime.Today;
+    public System.DateTime ToDate { get; set; } = System.DateTime.Today;
 
     // Наличные
 
     /// <summary>
-    /// Сумма внесения или выемки
+    /// Сумма внесения/выемки. Вход и выход: после CashIn, CashOut, GetCashIn, GetCashOut —
+    /// фактическая сумма операции из ответа (поле Sum), после GetOverAll — наличные в денежном ящике.
     /// </summary>
     public decimal CashAmount { get; set; }
 
     // Картинки
-
-    /// <summary>
-    /// Выравнивание изображения при печати. 
-    /// </summary>
-    public PictureAlignment PictureAlignment { get; set; } = PictureAlignment.Center;
 
     // Слип
 
     /// <summary>
     /// Текст нефискального документа.
     /// </summary>
-    public string TextForPrint { get; set; } = "";
+    public string Text { get; set; } = "";
 
     // Шаблоны
-
-    /// <summary>
-    /// Имя шаблона печати или шаблона чека.
-    /// </summary>
-    public string TemplateName { get; set; } = "";
-
-    /// <summary>
-    /// Тип печатного шаблона
-    /// </summary>
-    public PrintTemplateType TemplateType { get; set; }
 
     // Чек
 
     /// <summary>
-    /// Тип чека / задания.
+    /// Тип чека / задания. Сохраняется между чеками: Clear и NewCheck его не сбрасывают.
     /// </summary>
     public CheckType PaymentType { get; set; } = CheckType.Sale;
 
     /// <summary>
-    /// Только обработанные операции. 
+    /// Система налогообложения. Сохраняется между чеками: Clear и NewCheck его не сбрасывают.
     /// </summary>
-    public bool IsProcessed { get; set; }
-
-    /// <summary>
-    /// Система налогообложения. 
-    /// </summary>
-    public TaxSystem TaxVariant { get; private set; } = TaxSystem.Osn;
-
-    /// <summary>
-    /// Задать систему налогообложения на смену.
-    /// </summary>
-    public void SetTaxType(TaxSystem taxVariant) => TaxVariant = taxVariant;
+    public TaxSystem TaxVariant { get; set; } = TaxSystem.Osn;
 
     /// <summary>
     /// Часовая зона.
@@ -120,7 +95,7 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Идентификатор ФОИВ отраслевого реквизита чека.
     /// </summary>
-    public string IndustryIdentifierFoiv { get; set; } = "";
+    public string IndustryAttributeIdentifierFoiv { get; set; } = "";
 
     /// <summary>
     /// Дата документа-основания отраслевого реквизита чека.
@@ -135,7 +110,7 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Значение отраслевого реквизита чека.
     /// </summary>
-    public string IndustryAttributeValue { get; set; } = "";
+    public string IndustryAttributeAttributeValue { get; set; } = "";
 
     // Дополнительный реквизит пользователя (тег 1084)
 
@@ -159,40 +134,25 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Идентификатор операции операционного реквизита чека.
     /// </summary>
-    public int? OperationalAttributeOperationId { get; set; }
+    public int? OperationalAttributeOperationID { get; set; }
 
     /// <summary>
     /// Данные операции операционного реквизита чека.
     /// </summary>
-    public string OperationalAttributeData { get; set; } = "";
+    public string OperationalAttributeOperationData { get; set; } = "";
 
-    // Информация о безналичной оплаты
-
-    /// <summary>
-    /// Сумма безналичной оплаты по транзакции. Если 0 и остальные поля пусты — детализация не передаётся.
-    /// </summary>
-    public decimal ElectronicPaymentAmount { get; set; }
+    // Сведения о безналичной оплате, добавленные AddElectronicPaymentInfo.
+    private readonly List<(decimal Amount, ElectronicPaymentMethod? Method, string Identifiers, string Information)> _electronicPayments = [];
 
     /// <summary>
-    /// Признак способа безналичной оплаты.
+    /// Добавляет сведения о безналичной оплате в чек; для нескольких оплат вызывается несколько раз.
     /// </summary>
-    public ElectronicPaymentMethod ElectronicPaymentMethod {  get; set; }
-
-    /// <summary>
-    /// Идентификаторы безналичной оплаты.
-    /// </summary>
-    public string ElectronicPaymentIdentifiers { get; set; } = "";
-
-    /// <summary>
-    /// Дополнительные сведения о безналичной оплате.
-    /// </summary>
-    public string ElectronicPaymentAdditionalInformation { get; set; } = "";
-
-    /// <summary>
-    /// Детализация нескольких безналичных оплат. Если список не пуст, в чек уходит он,
-    /// а не одна оплата из полей ElectronicPaymentAmount / Method / Identifiers / AdditionalInformation.
-    /// </summary>
-    public List<ElectronicPayment> ElectronicPayments { get; } = [];
+    /// <param name="amount">Сумма безналичной оплаты по данной транзакции.</param>
+    /// <param name="paymentMethod">Признак способа безналичной оплаты. Если не указан — в запрос не входит.</param>
+    /// <param name="identifiers">Идентификаторы оплаты (например, RRN). Пустые в запрос не входят.</param>
+    /// <param name="additionalInformation">Дополнительные сведения об оплате. Пустые в запрос не входят.</param>
+    public void AddElectronicPaymentInfo(decimal amount, ElectronicPaymentMethod? paymentMethod = null, string identifiers = "", string additionalInformation = "")
+        => _electronicPayments.Add((amount, paymentMethod, identifiers, additionalInformation));
 
     /// <summary>
     /// Признак агента
@@ -237,17 +197,17 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Наименование поставщика.
     /// </summary>
-    public string VendorName { get; set; } = "";
+    public string VendorDataName { get; set; } = "";
 
     /// <summary>
     /// Телефон(ы) поставщика.
     /// </summary>
-    public string[]? VendorPhones { get; set; }
+    public string[]? VendorDataPhones { get; set; }
 
     /// <summary>
     /// ИНН поставщика.
     /// </summary>
-    public string VendorVatin { get; set; } = "";
+    public string VendorDataVatin { get; set; } = "";
 
     /// <summary>
     /// Наименование организации или фамилия, имя, отчество (при наличии)
@@ -321,255 +281,195 @@ public sealed partial class SkkmConnector
     public decimal CashProvision { get; set; }
 
     /// <summary>
-    /// Позиции чека
+    /// Строки документа. Фискальную строку добавляет <see cref="AddPosition"/>,
+    /// текст — <see cref="AddText"/>, картинку — <see cref="AddPicture"/>,
+    /// штрихкод — <see cref="AddBarcode"/>, линию — <see cref="AddSeparatorLine"/>.
     /// </summary>
-    private readonly List<Position> _positions = new();
+    public PositionTable Positions { get; } = new();
 
     /// <summary>
     /// Добавление фискальной строки (товара, услуги) в чек.
-    /// Обязательные поля задаются параметрами: наименование, количество, сумма со скидкой и ставка НДС;
-    /// признак предмета расчёта и признак способа расчёта (если не заданы, применяются
-    /// значения ККТ по умолчанию). Цена за единицу вычисляется как сумма, делённая на количество.
+    /// Обязательны наименование, количество, цена со скидкой, сумма со скидкой, ставка НДС,
+    /// признак предмета расчёта и признак способа расчёта. Мера количества необязательна.
     /// </summary>
-    public FiscalLine AddPosition(
+    /// <param name="name">Наименование товара или услуги.</param>
+    /// <param name="quantity">Количество.</param>
+    /// <param name="price">Цена за единицу с учётом скидок и наценок.</param>
+    /// <param name="sum">Сумма позиции с учётом скидок и наценок.</param>
+    /// <param name="tax">Ставка НДС.</param>
+    /// <param name="signCalculationObject">Признак предмета расчёта.</param>
+    /// <param name="signMethodCalculation">Признак способа расчёта.</param>
+    /// <param name="measureOfQuantity">Мера количества предмета расчёта (ФФД 1.2).</param>
+    public Position AddPosition(
         string name,
         decimal quantity,
+        decimal price,
         decimal sum,
         TaxRate tax,
-        SignCalculationObject? signCalculationObject = null,
-        SignMethodCalculation? signMethodCalculation = null)
+        SignCalculationObject signCalculationObject,
+        SignMethodCalculation signMethodCalculation,
+        MeasureOfQuantity? measureOfQuantity = null)
     {
-        var line = new FiscalLine
-        {
-            Name = name,
-            Quantity = quantity,
-            Sum = sum,
-            Price = quantity != 0 ? sum / quantity : sum,
-            Tax = tax,
-            SignCalculationObject = signCalculationObject,
-            SignMethodCalculation = signMethodCalculation
-        };
-        _positions.Add(line);
-        return line;
+        var row = Positions.Add();
+        row.FiscalString = true;
+        row.Name = name;
+        row.Quantity = quantity;
+        row.PriceWithDiscount = price;
+        row.SumWithDiscount = sum;
+        row.Tax = tax;
+        row.SignCalculationObject = signCalculationObject;
+        row.SignMethodCalculation = signMethodCalculation;
+        row.MeasureOfQuantity = measureOfQuantity;
+        return row;
     }
 
     /// <summary>
-    /// Добавление безналичной оплаты.
-    /// Для нескольких безналичных оплат вызвать несколько раз (каждая попадает в список
-    /// ElectronicPayments). Для одной оплаты можно также использовать плоские поля
-    /// ElectronicPaymentAmount / Method / Identifiers / AdditionalInformation.
+    /// Добавление текстовой строки в документ.
     /// </summary>
-    public ElectronicPayment AddElectronicPayment(
-        decimal amount,
-        ElectronicPaymentMethod? paymentMethod = null,
-        string? identifiers = null,
-        string? additionalInformation = null)
-    {
-        var payment = new ElectronicPayment
-        {
-            Amount = amount,
-            PaymentMethod = paymentMethod,
-            Identifiers = identifiers,
-            AdditionalInformation = additionalInformation,
-        };
-        ElectronicPayments.Add(payment);
-        return payment;
-    }
-
-    /// <summary>
-    /// Добавление текстовой строки в чек или печатный шаблон.
-    /// </summary>
-    public TextLine AddText(
+    public Position AddText(
         string text,
         PrintFont font = PrintFont.Normal,
         PrintAlignment alignment = PrintAlignment.Left)
     {
-        var line = new TextLine { Text = text, Font = font, Alignment = alignment };
-        _positions.Add(line);
-        return line;
+        var row = Positions.Add();
+        row.Text = text;
+        row.Font = font;
+        row.Alignment = alignment;
+        return row;
     }
 
     /// <summary>
-    /// Добавление текстовой строки из двух частей: левая прижимается к левому краю,
-    /// правая — к правому (например, «Итого» и сумма). Перенос при этом отключается.
+    /// Добавление картинки в документ.
     /// </summary>
-    public TextLine AddText(string left, string right, PrintFont font = PrintFont.Normal)
+    /// <param name="value">Картинка в Base64 (BMP или PNG).</param>
+    /// <param name="alignment">Выравнивание. Если не указано — по центру (2), как на Сервере ККМ.</param>
+    public Position AddPicture(string value, PictureAlignment alignment = PictureAlignment.Center)
     {
-        var line = new TextLine
-        {
-            Text = left,
-            LineRight = right,
-            Font = font,
-            Wrap = false
-        };
-        _positions.Add(line);
-        return line;
+        var row = Positions.Add();
+        row.PictureValue = value;
+        row.PictureAlignment = alignment;
+        return row;
     }
 
     /// <summary>
-    /// Добавление строки штрихкода в чек или печатный шаблон.
-    /// Высота и ширина штриха задаются в точках; печать текста действует только для одномерных.
+    /// Добавление разделительной линии в документ.
     /// </summary>
-    public BarcodeLine AddBarcode(
-        BarcodeType type,
-        string value,
-        PrintAlignment alignment = PrintAlignment.Center,
-        int height = 0,
-        int barWidth = 0,
-        BarcodePrintText printText = BarcodePrintText.None)
+    /// <param name="lineStyle">Стиль линии. Если не указан — сплошная.</param>
+    public Position AddSeparatorLine(LineStyle lineStyle = LineStyle.Solid)
     {
-        var line = new BarcodeLine
-        {
-            Type = type,
-            Barcode = value,
-            Alignment = alignment,
-            Height = height,
-            BarWidth = barWidth,
-            PrintText = printText
-        };
-        _positions.Add(line);
-        return line;
+        var row = Positions.Add();
+        row.lineStyle = lineStyle;
+        return row;
     }
 
     /// <summary>
-    /// Добавление разделительной линии в чек или печатный шаблон. Стиль по умолчанию — сплошная линия.
+    /// Добавление штрихкода в документ. Значение — текстом или в Base64: Base64 коннектор определяет сам.
     /// </summary>
-    public SeparatorLine AddSeparatorLine(LineStyle lineStyle = LineStyle.Solid)
+    /// <param name="type">Тип штрихкода.</param>
+    /// <param name="value">Значение штрихкода.</param>
+    /// <param name="alignment">Выравнивание.</param>
+    public Position AddBarcode(BarcodeType type, string value = "", PrintAlignment alignment = PrintAlignment.Center)
     {
-        var line = new SeparatorLine { LineStyle = lineStyle };
-        _positions.Add(line);
-        return line;
-    }
-
-    /// <summary>
-    /// Добавление изображения из файла в чек или печатный шаблон.
-    /// Файл (BMP или PNG) читается и кодируется в Base64; ширина и высота — в точках (0 — размер изображения).
-    /// </summary>
-    public PictureLine AddPicture(
-        string filePath,
-        PictureAlignment alignment = PictureAlignment.Center,
-        int width = 0,
-        int height = 0)
-    {
-        if (!LoadPicture(filePath, out var base64))
-            return new PictureLine { Alignment = alignment };
-
-        return AddPictureBase64(base64, alignment, width, height);
-    }
-
-    /// <summary>
-    /// Добавление изображения в Base64 в чек или печатный шаблон.
-    /// </summary>
-    internal PictureLine AddPictureBase64(
-        string valueBase64,
-        PictureAlignment alignment = PictureAlignment.Center,
-        int width = 0,
-        int height = 0)
-    {
-        var line = new PictureLine
-        {
-            Value = valueBase64,
-            Alignment = alignment,
-            Width = width > 0 ? width : null,
-            Height = height > 0 ? height : null
-        };
-        _positions.Add(line);
-        return line;
+        var row = Positions.Add();
+        row.BarcodeType = type;
+        row.BarcodeValue = value;
+        row.BarcodeAlignment = alignment;
+        return row;
     }
 
     // Коррекция
 
     /// <summary>
-    /// Тип коррекции
+    /// Тип коррекции. Не задан — не передаётся.
     /// </summary>
-    public CorrectionTypes CorrectionType { get; set; } = CorrectionTypes.Самостоятельно;
+    public CorrectionTypes? CorrectionDataType { get; set; }
 
     /// <summary>
     /// Описание коррекции.
     /// </summary>
-    public string CorrectionDescription { get; set; } = "";
+    public string CorrectionDataDescription { get; set; } = "";
 
     /// <summary>
-    /// Дата совершения корректируемого расчёта.
+    /// Дата совершения корректируемого расчёта. Не задана — не передаётся.
     /// </summary>
-    public DateTime CorrectionDate { get; set; } = DateTime.Today;
+    public System.DateTime? CorrectionDataDate { get; set; }
 
     /// <summary>
     /// Номер предписания налогового органа (для типа коррекции «По предписанию»).
     /// </summary>
-    public string CorrectionNumber { get; set; } = "";
+    public string CorrectionDataNumber { get; set; } = "";
 
-    // Суммы НДС по ставкам для чека коррекции ФФД 1.05 (плоские поля).
+    // Суммы НДС по ставкам для чека коррекции ФФД 1.05. Не заданные (null) не передаются.
 
     /// <summary>
     /// Сумма расчёта без НДС (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTaxNone { get; set; }
+    public decimal? SumTaxNone { get; set; }
 
     /// <summary>
     /// Сумма НДС 0% (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax0 { get; set; }
+    public decimal? SumTax0 { get; set; }
 
     /// <summary>
     /// Сумма НДС 5% (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax5 { get; set; }
+    public decimal? SumTax5 { get; set; }
 
     /// <summary>
     /// Сумма НДС 7% (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax7 { get; set; }
+    public decimal? SumTax7 { get; set; }
 
     /// <summary>
     /// Сумма НДС 10% (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax10 { get; set; }
+    public decimal? SumTax10 { get; set; }
 
     /// <summary>
     /// Сумма НДС 18% (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax18 { get; set; }
+    public decimal? SumTax18 { get; set; }
 
     /// <summary>
     /// Сумма НДС 20% (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax20 { get; set; }
+    public decimal? SumTax20 { get; set; }
 
     /// <summary>
     /// Сумма НДС 22% (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax22 { get; set; }
+    public decimal? SumTax22 { get; set; }
 
     /// <summary>
     /// Сумма НДС по расчётной ставке 10/110 (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax110 { get; set; }
+    public decimal? SumTax110 { get; set; }
 
     /// <summary>
     /// Сумма НДС по расчётной ставке 18/118 (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax118 { get; set; }
+    public decimal? SumTax118 { get; set; }
 
     /// <summary>
     /// Сумма НДС по расчётной ставке 20/120 (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax120 { get; set; }
+    public decimal? SumTax120 { get; set; }
 
     /// <summary>
     /// Сумма НДС по расчётной ставке 22/122 (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax122 { get; set; }
+    public decimal? SumTax122 { get; set; }
 
     /// <summary>
     /// Сумма НДС по расчётной ставке 5/105 (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax105 { get; set; }
+    public decimal? SumTax105 { get; set; }
 
     /// <summary>
     /// Сумма НДС по расчётной ставке 7/107 (коррекция 1.05).
     /// </summary>
-    public decimal CorrectionSumTax107 { get; set; }
+    public decimal? SumTax107 { get; set; }
 
     // Маркировка (вход)
 
@@ -586,7 +486,7 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Количество товара
     /// </summary>
-    public decimal MarkingQuantity { get; set; } = 1;
+    public decimal Quantity { get; set; } = 1;
 
     /// <summary>
     /// Мера количества предмета расчёта.
@@ -604,19 +504,19 @@ public sealed partial class SkkmConnector
     public int FractionalQuantityDenominator { get; set; }
 
     /// <summary>
-    /// Не отправлять результат проверки на сервер ОИСМ
+    /// Не отправлять результат проверки на сервер ОИСМ.
     /// </summary>
     public bool NotSendToServer { get; set; }
 
     /// <summary>
-    /// Признак ожидания ответа ОИСМ
+    /// Признак ожидания ответа ОИСМ.
     /// </summary>
     public bool WaitForResult { get; set; }
 
     /// <summary>
     /// Уникальный код запроса КМ
     /// </summary>
-    public string RequestKmGuid { get; set; } = "";
+    public string Guid { get; set; } = "";
 
     /// <summary>
     /// Признак подтверждения кода маркировки.
@@ -626,197 +526,113 @@ public sealed partial class SkkmConnector
     // Параметры отдельных операций: отчёты, очередь, картинки, маркировка, фискализация.
 
     /// <summary>
-    /// Тип отчёта для списка Z-отчётов.
+    /// Коды маркировки для проверки — одной строкой через запятую:
+    /// <c>Codes = "код1,код2"</c>.
     /// </summary>
-    public int ReportType { get; set; }
+    public string Codes { get; set; } = "";
 
     /// <summary>
-    /// Идентификатор задания в очереди печати.
+    /// Коды из <see cref="Codes"/> массивом: делим по запятой (и по переносу строки), пустые пропускаем.
     /// </summary>
-    public string QueueTaskId { get; set; } = "";
+    private string[] CodeList() =>
+        Codes.Split([',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    // ── Подготовка входа ──
 
     /// <summary>
-    /// Имя картинки или шаблона.
+    /// Очищает данные чека.
+    /// Тип чека, СНО, кассира, данные маркировки и прочие результаты прошлого вызова не сбрасывает.
     /// </summary>
-    public string PictureId { get; set; } = "";
+    public void Clear()
+    {
+        CustomerInfo = "";
+        CustomerVatin = "";
+        CustomerEmail = "";
+        CustomerPhone = "";
+        CustomerDateOfBirth = "";
+        CustomerCitizenship = "";
+        CustomerDocumentTypeCode = "";
+        CustomerDocumentData = "";
+        CustomerAddress = "";
+
+        SenderEmail = "";
+        SaleAddress = "";
+        SaleLocation = "";
+        TimeZone = null;
+
+        UserAttributeName = "";
+        UserAttributeValue = "";
+
+        TextBefore = "";
+        TextAfter = "";
+
+        Positions.Clear();
+        Counter = [];
+        _electronicPayments.Clear();
+
+        Cash = 0;
+        ElectronicPayment = 0;
+        Credit = 0;
+        AdvancePayment = 0;
+        CashProvision = 0;
+
+        CashAmount = 0;
+
+        CorrectionDataType = null;
+        CorrectionDataDescription = "";
+        CorrectionDataDate = null;
+        CorrectionDataNumber = "";
+        AdditionalAttribute = "";
+
+        IsElectronically = false;
+        IsOperationOnline = false;
+        AgentSign = null;
+        PayingAgentOperation = "";
+        PayingAgentPhone = null;
+        ReceivePaymentsOperatorPhone = null;
+        MoneyTransferOperatorPhone = null;
+        MoneyTransferOperatorName = "";
+        MoneyTransferOperatorAddress = "";
+        MoneyTransferOperatorVatin = "";
+        VendorDataName = "";
+        VendorDataPhones = null;
+        VendorDataVatin = "";
+
+        OperationalAttributeDateTime = "";
+        OperationalAttributeOperationData = "";
+        OperationalAttributeOperationID = null;
+
+        IndustryAttributeAttributeValue = "";
+        IndustryAttributeDocumentDate = "";
+        IndustryAttributeDocumentNumber = "";
+        IndustryAttributeIdentifierFoiv = "";
+
+        ShiftNumber = 0;
+        CheckNumber = 0;
+        FiscalDatetime = default;
+        ErrorCode = 0;
+        ErrorDescription = "";
+
+        SumTax0 = SumTax5 = SumTax7 = SumTax10 = SumTax18 = SumTax20 = SumTax22 = SumTaxNone = null;
+        SumTax105 = SumTax107 = SumTax110 = SumTax118 = SumTax120 = SumTax122 = null;
+    }
 
     /// <summary>
-    /// Коды маркировки для проверки.
+    /// Очищает предыдущий чек и задаёт тип операции, систему налогообложения и, если переданы, кассира.
     /// </summary>
-    public List<string> MarkingCodes { get; } = [];
+    /// <param name="paymentType">Тип операции.</param>
+    /// <param name="taxVariant">Система налогообложения.</param>
+    /// <param name="cashierName">ФИО кассира. Пустое — остаётся заданный ранее.</param>
+    /// <param name="cashierVatin">ИНН кассира. Пустой — остаётся заданный ранее.</param>
+    public void NewCheck(CheckType paymentType, TaxSystem taxVariant, string cashierName = "", string cashierVatin = "")
+    {
+        Clear();
+        PaymentType = paymentType;
+        TaxVariant = taxVariant;
+        if (cashierName.Length > 0)
+            CashierName = cashierName;
+        if (cashierVatin.Length > 0)
+            CashierVatin = cashierVatin;
+    }
 
-    /// <summary>
-    /// Регистрационный номер ККТ (РНМ) для фискализации.
-    /// </summary>
-    public string FiscalizationRnNumber { get; set; } = "";
-
-    /// <summary>
-    /// Системы налогообложения, поддерживаемые ККТ
-    /// </summary>
-    public TaxSystem[] FiscalizationTaxationSystems { get; set; } = [];
-
-    /// <summary>
-    /// ИНН организации.
-    /// </summary>
-    public string FiscalizationVatin { get; set; } = "";
-
-    /// <summary>
-    /// Наименование организации.
-    /// </summary>
-    public string FiscalizationCompanyName { get; set; } = "";
-
-    /// <summary>
-    /// Номер фискального накопителя (ФН).
-    /// </summary>
-    public string FiscalizationFn { get; set; } = "";
-
-    /// <summary>
-    /// Версия ФФД ККТ.
-    /// </summary>
-    public string FiscalizationFfdVersionKkt { get; set; } = "";
-
-    /// <summary>
-    /// Версия ФФД ФН.
-    /// </summary>
-    public string FiscalizationFfdVersionFn { get; set; } = "";
-
-    /// <summary>
-    /// Коды причин перерегистрации (метки).
-    /// </summary>
-    public string FiscalizationRegistrationLabelCodes { get; set; } = "";
-
-    /// <summary>
-    /// Адрес ОФД.
-    /// </summary>
-    public string FiscalizationOfdAddress { get; set; } = "";
-
-    /// <summary>
-    /// Порт ОФД.
-    /// </summary>
-    public int FiscalizationOfdPort { get; set; }
-
-    /// <summary>
-    /// Номер автомата (для автоматического режима).
-    /// </summary>
-    public string FiscalizationAutomaticNumber { get; set; } = "";
-
-    /// <summary>
-    /// Адрес электронной почты отправителя.
-    /// </summary>
-    public string FiscalizationSenderEmail { get; set; } = "";
-
-    /// <summary>
-    /// Код причины перерегистрации.
-    /// </summary>
-    public FiscalizationReasonCode FiscalizationReasonCode { get; set; }
-
-    /// <summary>
-    /// Хост ИСМ (информационная система маркировки).
-    /// </summary>
-    public string FiscalizationIsmHost { get; set; } = "";
-
-    /// <summary>
-    /// Порт ИСМ.
-    /// </summary>
-    public string FiscalizationIsmPort { get; set; } = "";
-
-    /// <summary>
-    /// Адрес сайта ФНС.
-    /// </summary>
-    public string FiscalizationFnsUrl { get; set; } = "";
-
-    /// <summary>
-    /// ИНН ОФД.
-    /// </summary>
-    public string FiscalizationOfdVatin { get; set; } = "";
-
-    /// <summary>
-    /// Наименование ОФД.
-    /// </summary>
-    public string FiscalizationOfdName { get; set; } = "";
-
-    /// <summary>
-    /// Признаки агента, поддерживаемые ККТ.
-    /// </summary>
-    public AgentType[] FiscalizationAgentTypes { get; set; } = [];
-
-    /// <summary>
-    /// Признак БСО.
-    /// </summary>
-    public bool FiscalizationIsBsoSign { get; set; }
-
-    /// <summary>
-    /// Работа с маркировкой.
-    /// </summary>
-    public bool FiscalizationIsMarking { get; set; }
-
-    /// <summary>
-    /// Ломбард.
-    /// </summary>
-    public bool FiscalizationIsPawnshop { get; set; }
-
-    /// <summary>
-    /// Страхование.
-    /// </summary>
-    public bool FiscalizationIsAssurance { get; set; }
-
-    /// <summary>
-    /// Автоматический режим.
-    /// </summary>
-    public bool FiscalizationIsAutomatic { get; set; }
-
-    /// <summary>
-    /// Торговый автомат (вендинг).
-    /// </summary>
-    public bool FiscalizationIsVending { get; set; }
-
-    /// <summary>
-    /// Автоматический принтер.
-    /// </summary>
-    public bool FiscalizationIsAutomaticPrinter { get; set; }
-
-    /// <summary>
-    /// Расчёты только в интернете.
-    /// </summary>
-    public bool FiscalizationIsOnline { get; set; }
-
-    /// <summary>
-    /// Проведение лотерей.
-    /// </summary>
-    public bool FiscalizationIsLottery { get; set; }
-
-    /// <summary>
-    /// Проведение азартных игр.
-    /// </summary>
-    public bool FiscalizationIsGambling { get; set; }
-
-    /// <summary>
-    /// Продажа подакцизных товаров.
-    /// </summary>
-    public bool FiscalizationIsExcisable { get; set; }
-
-    /// <summary>
-    /// Применение в сфере услуг.
-    /// </summary>
-    public bool FiscalizationIsService { get; set; }
-
-    /// <summary>
-    /// Шифрование данных.
-    /// </summary>
-    public bool FiscalizationIsEncrypted { get; set; }
-
-    /// <summary>
-    /// Автономный режим.
-    /// </summary>
-    public bool FiscalizationIsOffline { get; set; }
-
-    /// <summary>
-    /// Услуги общественного питания.
-    /// </summary>
-    public bool FiscalizationIsCateringServices { get; set; }
-
-    /// <summary>
-    /// Оптовая торговля.
-    /// </summary>
-    public bool FiscalizationIsWholesaleTrade { get; set; }
 }

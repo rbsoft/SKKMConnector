@@ -44,11 +44,10 @@ SkkmConnector/
 | ------------------------- | ------------------------- | ------------------------------------------------------------------------------- |
 | `Host`                    | `string`                  | Хост сервера ККМ (IP или DNS). По умолчанию `localhost`.                        |
 | `Port`                    | `int`                     | Порт службы печати. По умолчанию `4398`.                                        |
-| `Timeout`                 | `TimeSpan`                | Таймаут запроса. По умолчанию 60 с.                                             |
 | `Token`                   | `string`                  | Токен авторизации (заголовок `api_key`). Нужен, если анонимный доступ выключен. |
 | `AuthUserName`            | `string`                  | Логин для `GetUserToken()` (Basic Auth). По умолчанию `Admin`.                  |
 | `AuthPassword`            | `string`                  | Пароль для `GetUserToken()`. По умолчанию `Admin`.                              |
-| `TerminalId`              | `string`                  | Идентификатор рабочего места (заголовок `TerminalId`).                          |
+| `TerminalId`              | `string`                  | Идентификатор рабочего места (заголовок `terminalId`).                          |
 | `DeviceName`              | `string`                  | Имя кассы на сервере ККМ.                                                       |
 | `Cashier`                 | `Cashier`                 | Кассир для документов.                                                          |
 | `PoolName`                | `string`                  | Имя пула устройств.                                                             |
@@ -58,8 +57,7 @@ SkkmConnector/
 | `TemplateType`            | `PrintTemplateType`       | Тип печатного шаблона.                                                          |
 | `UserId`                  | `string`                  | Идентификатор пользователя сервера ККМ.                                         |
 | `FnNumber`                | `string`                  | Номер ФН (копия чека по данным ФН).                                             |
-| `ReportType`              | `int`                     | Тип отчёта для списка Z-отчётов.                                                |
-| `MarkingCodes`            | `List<string>`            | Коды маркировки для проверки (`VerifyMarking` и аналоги).                       |
+| `Codes`                   | `string`                  | Коды маркировки через запятую (`VerifyMarking` и аналоги).                      |
 | `DeviceSettings`          | `DeviceSettings`          | Настройки кассы для добавления / изменения.                                     |
 | `ServiceSettings`         | `ServiceSettings`         | Настройки службы печати.                                                        |
 | `ServiceUser`             | `ServiceUser`             | Пользователь сервера ККМ.                                                       |
@@ -102,13 +100,13 @@ SkkmConnector/
 | `TextForPrint`                  | `string`                  | Текст нефискального документа (слип).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `PictureName`                   | `string`                  | Имя картинки на сервере.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `PictureBase64`                 | `string`                  | Картинка в Base64.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `PictureAlignment`              | `PictureAlignment`        | Выравнивание: <br>1 - слева; <br>2 - центр; <br>3 - справа.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `PictureAlignment`              | `PictureAlignment`        | Выравнивание: <br>Left — слева; <br>Center — по центру; <br>Right — справа.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `DocumentId`                    | `string`                  | Идентификатор документа (`docId`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `FiscalSign`                    | `string`                  | Фискальный признак документа.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `ShiftNumber`                   | `int`                     | Номер смены (вход/выход в зависимости от метода).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `CheckNumber`                   | `int`                     | Номер фискального документа.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `MarkingCode`                   | `string`                  | Код маркировки в Base64.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `PlannedStatus`                 | `MarkingPlannedStatus`    | Планируемый статус (таблица 105 ФФД): NotSpecified - Не задан (значение по умолчанию в запросе)<br>Sold - Реализован<br>InSale - Мерный товар в стадии реализации<br>Returned - Возвращён<br>PartiallyReturned - Часть товара возвращена<br>Unchanged - Статус не изменился                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `PlannedStatus`                 | `MarkingPlannedStatus`    | Планируемый статус (таблица 105 ФФД): NotSpecified - Не задан (значение по умолчанию в запросе)<br>Sold - Реализован<br>InSale - Мерный товар в стадии реализации<br>Returned - Возвращён<br>PartiallyReturned - Часть товара возвращена<br>PieceInSale - Штучный товар в стадии реализации<br>MeasuredSold - Мерный товар реализован<br>Unchanged - Статус не изменился                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `MarkingQuantity`               | `decimal`                 | Количество для проверки КМ.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `MeasureOfQuantity`             | `MeasureOfQuantity`       | Мера количества предмета расчёта:<br>Piece - Штука или единица (поштучная реализация)<br>Gram - Грамм<br>Kilogram - Килограмм<br>Tonne - Тонна<br>Centimeter - Сантиметр<br>Decimeter - Дециметр<br>Meter - Метр<br>SquareCentimeter - Квадратный сантиметр<br>SquareDecimeter - Квадратный дециметр<br>SquareMeter - Квадратный метр<br>Milliliter - Миллилитр<br>Liter - Литр<br>CubicMeter - Кубический метр<br>KilowattHour - Киловатт-час<br>Gigacalorie - Гигакалория<br>Day - Сутки<br>Hour - Час<br>Minute - Минута<br>Second - Секунда<br>Kilobyte - Килобайт<br>Megabyte - Мегабайт<br>Gigabyte - Гигабайт<br>Terabyte - Терабайт<br>Other - Иная единица измерения                                                                 |
 | `FractionalQuantityNumerator`   | `int`                     | Числитель дробного количества.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -121,11 +119,10 @@ SkkmConnector/
 
 ### 3.1.3 Свойства-результаты
 
-После каждого вызова коннектор сам разбирает ответ сервера: в `Ok` / `ErrorCode` / `ErrorDescription` попадает статус, а содержимое `Result` - в свойства объекта (в том числе плоские поля ниже после фискальных операций).
+После каждого вызова коннектор сам разбирает ответ сервера: в `ErrorCode` / `ErrorDescription` попадает статус (`ErrorCode = 0` — успех; методы также возвращают `true`/`false`), а содержимое `Result` - в свойства объекта (в том числе плоские поля ниже после фискальных операций).
 
 | Свойство                       | Тип                       | Описание                                                   |
 | ------------------------------ | ------------------------- | ---------------------------------------------------------- |
-| `Ok`                           | `bool`                    | Успех последнего вызова.                                   |
 | `ErrorCode`                    | `int`                     | Код ошибки сервера. `0` — нет ошибки.                      |
 | `ErrorDescription`             | `string`                  | Текст ошибки.                                              |
 | `LastResult`                   | `JsonElement`             | Поле `Result` последнего ответа.                           |
@@ -151,7 +148,7 @@ SkkmConnector/
 | `IsFnPresent`                  | `bool`                    | ФН присутствует.                                           |
 | `IsFiscal`                     | `bool`                    | Фискальный режим.                                          |
 | `FnWarnings`                   | `Warnings`                | Предупреждения ФН из ответа.                               |
-| `Devices`                      | `DeviceListResponse[]`    | Список устройств.                                          |
+| `DeviceList`                   | `DeviceListResponse[]`    | Список устройств.                                          |
 | `Kkt`                          | `DataKkt`                 | Подробные данные кассы после `Connect()`.                  |
 | `Status`                       | `KktStatus`               | Расширенный статус ККТ.                                    |
 | `ShiftStatus`                  | `ResponseCurrentStatus`   | Краткий статус смены.                                      |
@@ -475,10 +472,7 @@ kkm.Token = "a6261fa7-6675-41c6-a9f5-cee920e1d71c";
 kkm.Cashier = new Cashier { Name = "Иванов А.И." };
 
 // 3. Подключение: при успехе параметры ККМ уже в свойствах
-await kkm.Connect();
-
-// 4. Анализируем ответ — обработчик уже разложил Success/Code/Description и Result
-if (kkm.Ok)
+if (await kkm.Connect())
 {
     Console.WriteLine($"Длина строки: {kkm.LineLength}, место: {kkm.SaleLocation}, ФФД: {kkm.Kkt?.Device?.FfdVersion}");
 }
@@ -492,9 +486,7 @@ else
 
 ```csharp
 // 5. Открываем кассовую смену
-await kkm.OpenShift();
-
-if (kkm.Ok)
+if (await kkm.OpenShift())
 {
     Console.WriteLine($"Смена открыта: {kkm.ShiftNumber}");
 }
@@ -541,9 +533,7 @@ kkm.Positions.Add(new FiscalLine
 // Итого 150 + 160 = 310
 kkm.Payments = new Payments { Cash = 310m };
 
-await kkm.PrintCheck();
-
-if (kkm.Ok)
+if (await kkm.PrintCheck())
 {
     Console.WriteLine($"ФП: {kkm.FiscalSign}, смена: {kkm.ShiftNumber}, docId: {kkm.DocumentId}");
 }
@@ -561,7 +551,7 @@ else
 
 Свойства, методы и перечисления коннектора повторяют REST API Сервера ККМ.
 
-- **Справочник по коннектору:** [API.md](API.md) — методы, эндпоинты, входные параметры, перечисления и свойства-результаты.
+- **Справочник по коннектору:** [API.md](API.md) — методы, поля входа и выхода, типы данных. Примеры вызовов — [Примеры использования.md](Примеры%20использования.md).
 - **Встроенная документация сервера:** в интерфейсе Сервера ККМ — «Помощь» — «REST API».
 
 Подсказки по каждому свойству и методу доступны из XML-документации, поставляемой в `SkkmConnector\bin\Release\net6.0` — большинство редакторов показывают их при наведении.

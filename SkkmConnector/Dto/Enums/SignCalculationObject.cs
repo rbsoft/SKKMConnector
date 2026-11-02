@@ -87,16 +87,16 @@ namespace RBSoftSkkm;
 /// CashWithdrawalByAgent - Выдача денежных средств банковским платёжным агентом
 /// </para>
 /// <para>
-/// АТНМ - Подакцизный товар с маркировкой без кода (АТНМ)
+/// ExcisableMarkedWithoutCode - Подакцизный товар с маркировкой без кода (АТНМ)
 /// </para>
 /// <para>
-/// АТМ - Подакцизный товар с маркировкой с кодом (АТМ)
+/// ExcisableMarkedWithCode - Подакцизный товар с маркировкой с кодом (АТМ)
 /// </para>
 /// <para>
-/// ТНМ - Товар с маркировкой без кода, не подакцизный (ТНМ)
+/// MarkedWithoutCode - Товар с маркировкой без кода, не подакцизный (ТНМ)
 /// </para>
 /// <para>
-/// ТМ - Товар с маркировкой с кодом, не подакцизный (ТМ)
+/// MarkedWithCode - Товар с маркировкой с кодом, не подакцизный (ТМ)
 /// </para>
 /// </summary>
 public enum SignCalculationObject
@@ -244,20 +244,20 @@ public enum SignCalculationObject
     /// <summary>
     /// Подакцизный товар с маркировкой без кода (АТНМ).
     /// </summary>
-    АТНМ = 30,
+    ExcisableMarkedWithoutCode = 30,
 
     /// <summary>
     /// Подакцизный товар с маркировкой с кодом (АТМ).
     /// </summary>
-    АТМ = 31,
+    ExcisableMarkedWithCode = 31,
 
     /// <summary>
     /// Товар с маркировкой без кода, не подакцизный (ТНМ).
     /// </summary>
-    ТНМ = 32,
+    MarkedWithoutCode = 32,
 
     /// <summary>
     /// Товар с маркировкой с кодом, не подакцизный (ТМ).
     /// </summary>
-    ТМ = 33,
+    MarkedWithCode = 33,
 }

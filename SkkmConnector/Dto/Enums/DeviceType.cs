@@ -18,6 +18,12 @@ namespace RBSoftSkkm
     /// Native1C5000 - 1С(5.0)
     /// </para>
     /// <para>
+    /// KktLab - ККТ-Лаб
+    /// </para>
+    /// <para>
+    /// TorgBalance - Торговый баланс
+    /// </para>
+    /// <para>
     /// EmulatorFR - Эмулятор
     /// </para>
     /// </summary>
@@ -47,6 +53,16 @@ namespace RBSoftSkkm
         /// 1С(5.0).
         /// </summary>
         Native1C5000 = 5,
+
+        /// <summary>
+        /// ККТ-Лаб.
+        /// </summary>
+        KktLab = 6,
+
+        /// <summary>
+        /// Торговый баланс.
+        /// </summary>
+        TorgBalance = 7,
 
         /// <summary>
         /// Эмулятор.

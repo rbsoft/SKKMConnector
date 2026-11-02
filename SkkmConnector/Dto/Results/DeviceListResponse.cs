@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 
 namespace RBSoftSkkm
 {
@@ -10,25 +9,21 @@ namespace RBSoftSkkm
         /// <summary>
         /// Имя устройства.
         /// </summary>
-        [JsonPropertyName("DeviceName")]
         public string? DeviceName { get; set; }
 
         /// <summary>
         /// Тип драйвера
         /// </summary>
-        [JsonPropertyName("Driver")]
         public DeviceType Driver { get; set; }
 
         /// <summary>
         /// Имя пула, в который входит устройство.
         /// </summary>
-        [JsonPropertyName("Pool")]
         public string? Pool { get; set; }
 
         /// <summary>
         /// Описание статуса устройства.
         /// </summary>
-        [JsonPropertyName("DeviceStatusDescription")]
         public string? DeviceStatusDescription { get; set; }
     }
 }

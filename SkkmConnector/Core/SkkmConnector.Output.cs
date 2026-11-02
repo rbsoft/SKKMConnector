@@ -1,513 +1,404 @@
+using System.Reflection;
+
 namespace RBSoftSkkm;
 
+// Выходные свойства
 public sealed partial class SkkmConnector
 {
-    /// <summary>
-    /// Успех последнего вызова.
-    /// </summary>
-    public bool Ok { get; private set; }
+    // ── Результат вызова: Success, Code, Description ──
 
-    /// <summary>
-    /// Код ошибки сервера. 0 — нет ошибки.
-    /// </summary>
+    // Успех последнего вызова (Success из ответа). Наружу — результатом метода и ErrorCode.
+    private bool _ok;
+
+    /// <summary>Код ошибки сервера. 0 — нет ошибки.</summary>
     public int ErrorCode { get; private set; }
 
-    /// <summary>
-    /// Текст ошибки сервера.
-    /// </summary>
+    /// <summary>Текст ошибки сервера.</summary>
     public string ErrorDescription { get; private set; } = "";
 
-    /// <summary>
-    /// Список устройств.
-    /// </summary>
-    public DeviceListResponse[] Devices { get; private set; } = [];
+    // ── Таблицы ──
 
     /// <summary>
-    /// Данные кассы.
+    /// Таблица «ключ — значение»: поля ответа сервера (поле Result).
+    /// После Get…List — основные поля каждого документа с ключом «[номер] Имя» — ReadDocuments.
     /// </summary>
-    internal DataKkt? Kkt { get; private set; }
+    public IReadOnlyList<ReportValue> ReportValues { get; private set; } = [];
 
     /// <summary>
-    /// Состояние ККМ.
+    /// Счётчики по типам операций
+    /// после <see cref="GetTotals"/> и отчётов о смене — за смену, после <see cref="GetOverAll"/> — необнуляемые.
+    /// Строка есть только для операции, которую прислал сервер.
     /// </summary>
-    internal KktStatus? Status { get; private set; }
+    public IReadOnlyList<Counter> Counter { get; private set; } = [];
+
+    /// <summary>Список ККТ — GetDeviceList, GetDeviceListByPool.</summary>
+    public DeviceListResponse[] DeviceList { get; private set; } = [];
+
+    /// <summary>Лицензии ККТ — ReadDevice.</summary>
+    public IReadOnlyList<KktLicense> KktLicenses { get; private set; } = [];
+
+    // ── Документ и смена: ReadDocument, ReadOperationResult, ReadOutputParameters, ReadShiftTotal ──
 
     /// <summary>
-    /// Статус смены.
+    /// Идентификатор документа (docId). В ответе — id созданного документа. На входе — id для запросов
+    /// по документу, а в <see cref="PrintCheckCorrection105"/> — id для повторной печати (передаётся,
+    /// только если задан явно, а не остался от прошлого ответа).
     /// </summary>
-    internal ResponseCurrentStatus? ShiftStatus { get; private set; }
+    public string DocId
+    {
+        get => _docId;
+        set { _docId = value; _docIdFromResponse = false; }
+    }
 
-    /// <summary>
-    /// Итоги смены.
-    /// </summary>
-    internal ResShiftTotal? ShiftTotals { get; private set; }
+    private string _docId = "";
 
-    /// <summary>
-    /// Необнуляемые итоги за всё время работы (X/Z-отчёт).
-    /// </summary>
-    internal OverallTotals? OverallTotals { get; private set; }
+    // true — DocId записан из ответа сервера; сбрасывается, когда DocId присваивают снаружи.
+    private bool _docIdFromResponse;
 
-    /// <summary>
-    /// Остаток наличных.
-    /// </summary>
-    public decimal CashBalance { get; private set; }
+    /// <summary>DocId, заданный явно (не оставшийся от прошлого ответа), или null.</summary>
+    private string? ExplicitDocId => !_docIdFromResponse && _docId.Length > 0 ? _docId : null;
 
-    /// <summary>
-    /// Список картинок.
-    /// </summary>
-    public List<Picture> Pictures { get; private set; } = [];
+    /// <summary>Фискальный признак документа.</summary>
+    public string FiscalSign { get; private set; } = "";
 
-    /// <summary>
-    /// Ширина строки чека в символах.
-    /// </summary>
-    public int LineLength { get; private set; }
+    /// <summary>Дата и время документа по часам ФН.</summary>
+    public System.DateTime FiscalDatetime { get; private set; }
 
-    /// <summary>
-    /// Ширина печатной области в пикселях.
-    /// </summary>
-    public int LineLengthPixels { get; private set; }
-
-    /// <summary>
-    /// Необнуляемая сумма продаж.
-    /// </summary>
-    public decimal NonZeroSum { get; private set; }
-
-    /// <summary>
-    /// Результат локальной проверки КМ.
-    /// </summary>
-    internal RequestKmResult? MarkingCheck { get; private set; }
-
-    /// <summary>
-    /// Результат проверки КМ в ОИСМ.
-    /// </summary>
-    internal ProcessingKmResult? MarkingProcessing { get; private set; }
-
-    /// <summary>
-    /// Документ.
-    /// </summary>
-    internal CheckDocument? Check { get; private set; }
-
-    /// <summary>
-    /// Заголовок последнего документа:
-    /// </summary>
-    internal DocumentHeader? DocumentHeader => Check?.DocumentHeader;
-
-    /// <summary>
-    /// Список документов.
-    /// </summary>
-    public IReadOnlyList<Check> Checks { get; private set; } = [];
-
-    /// <summary>
-    /// Список слипов.
-    /// </summary>
-    public IReadOnlyList<Check> Slips => Checks;
-
-    /// <summary>
-    /// Список документов внесения.
-    /// </summary>
-    public IReadOnlyList<Check> CashIns => Checks;
-
-    /// <summary>
-    /// Список чеков коррекции ФФД 1.0.5.
-    /// </summary>
-    public IReadOnlyList<Check> Corrections105 => Checks;
-
-    /// <summary>
-    /// Список чеков коррекции ФФД 1.2.
-    /// </summary>
-    public IReadOnlyList<Check> Corrections120 => Checks;
-
-    /// <summary>
-    /// Статус задания.
-    /// </summary>
-    internal ResponseTaskStatus? TaskStatus { get; private set; }
-
-    /// <summary>
-    /// Печатная форма.
-    /// </summary>
-    public IReadOnlyList<PrintLine> PrintForm { get; private set; } = [];
-
-    /// <summary>
-    /// Список отчётов.
-    /// </summary>
-    public ShiftListItem[] Shifts { get; private set; } = [];
-
-    /// <summary>
-    /// Версия сервера.
-    /// </summary>
-    public string ServerVersion { get; private set; } = "";
-
-    /// <summary>
-    /// Наименование продукта сервера ККМ (из Ping).
-    /// </summary>
-    public string ServerProduct { get; private set; } = "";
-
-    /// <summary>
-    /// Список пулов.
-    /// </summary>
-    public string[] Pools { get; private set; } = [];
-
-    /// <summary>
-    /// Очередь печати.
-    /// </summary>
-    public QueueItem[] Queue { get; private set; } = [];
-
-    /// <summary>
-    /// Состояние задания очереди.
-    /// </summary>
-    internal QueueTaskState? QueueTask { get; private set; }
-
-    /// <summary>
-    /// Операция.
-    /// </summary>
-    internal DeviceTaskInfo? Operation { get; private set; }
-
-    /// <summary>
-    /// История операции.
-    /// </summary>
-    public IReadOnlyList<OperationHistoryEntry> OperationHistory { get; private set; } = [];
-
-    /// <summary>
-    /// TLV операции.
-    /// </summary>
-    public string OperationTlv { get; private set; } = "";
-
-    /// <summary>
-    /// Коды маркировки операции.
-    /// </summary>
-    public OperationKmRow[] OperationKm { get; private set; } = [];
-
-    /// <summary>
-    /// Связанные операции.
-    /// </summary>
-    public IReadOnlyList<RelatedOperation> RelatedOperations { get; private set; } = [];
-
-    /// <summary>
-    /// Список операций.
-    /// </summary>
-    public OperationListItem[] Operations { get; private set; } = [];
-
-    /// <summary>
-    /// Шаблон печати: имя, тип и строки.
-    /// </summary>
-    internal PrintTemplate? PrintTemplate { get; private set; }
-
-    /// <summary>
-    /// Строки текущего печатного шаблона: либо полученные методом <see cref="GetTemplate"/>,
-    /// либо собранные через <see cref="AddText(string, PrintFont, PrintAlignment)"/> /
-    /// <see cref="AddBarcode"/> / <see cref="AddSeparatorLine"/> / <see cref="AddPicture"/>.
-    /// </summary>
-    public IReadOnlyList<PrintLine> TemplateLines
-        => (PrintTemplate?.Lines.Count > 0
-                ? (IEnumerable<PrintTemplateLine>)PrintTemplate.Lines
-                : BuildPrintLines(_positions))
-            .Select(x => new PrintLine(x))
-            .ToList();
-
-    /// <summary>
-    /// Имена шаблонов печати на сервере.
-    /// </summary>
-    public string[] Templates { get; private set; } = [];
-
-    /// <summary>
-    /// Имена шаблонов печати на сервере. То же, что Templates.
-    /// </summary>
-    public string[] TemplateNames => Templates;
-
-    /// <summary>
-    /// Шаблон чека.
-    /// </summary>
-    internal CheckTemplate? CheckTemplate { get; private set; }
-
-    /// <summary>
-    /// Документ шаблона чека: позиции, оплаты, тип чека, СНО.
-    /// </summary>
-    internal CheckTemplateDocument? CheckTemplateDocument { get; private set; }
-
-    /// <summary>
-    /// Список шаблонов чека: имя и тип чека.
-    /// </summary>
-    public CheckTemplateListItem[] CheckTemplates { get; private set; } = [];
-
-    /// <summary>
-    /// Документ фискализации.
-    /// </summary>
-    internal FiscalizationDocument? FiscalizationDocument { get; private set; }
-
-    /// <summary>
-    /// Список фискализаций.
-    /// </summary>
-    public FiscalizationDocument[] Fiscalizations { get; private set; } = [];
-
-    /// <summary>
-    /// Результат проверки маркировки.
-    /// </summary>
-    internal MarkingVerifyResult? MarkingVerify { get; private set; }
-
-    /// <summary>
-    /// Картинка в Base64.
-    /// </summary>
-    public string PictureBase64Result { get; private set; } = "";
-
-    #region Выход: скаляры фискального ответа (перенесено из CheckInput)
-
-    // Документы / смены
-
-    /// <summary>
-    /// Идентификатор документа (docId)
-    /// </summary>
-    public string DocumentId { get; set; } = "";
-
-    /// <summary>
-    /// Фискальный признак документа
-    /// </summary>
-    public string FiscalSign { get; set; } = "";
-
-    /// <summary>
-    /// Номер смены
-    /// </summary>
+    /// <summary>Номер смены.</summary>
     public int ShiftNumber { get; set; }
 
-    /// <summary>
-    /// Номер фискального документа (ФД)
-    /// </summary>
+    /// <summary>Состояние смены.</summary>
+    public ShiftState? ShiftState { get; private set; }
+
+    /// <summary>Номер фискального документа (ФД).</summary>
     public int CheckNumber { get; set; }
 
-    /// <summary>
-    /// Номер чека за смену
-    /// </summary>
-    public int CheckNumberInShift { get; set; }
+    /// <summary>Номер последнего фискального документа (из выходных параметров смены и отчётов).</summary>
+    public int LastCheckNumber { get; private set; }
+
+    /// <summary>Номер чека за смену.</summary>
+    public int CheckNumberInShift { get; private set; }
+
+    /// <summary>Количество кассовых чеков за смену.</summary>
+    public int NumberOfChecks { get; private set; }
+
+    /// <summary>Количество документов за смену.</summary>
+    public int NumberOfDocuments { get; private set; }
+
+    /// <summary>Количество чеков и чеков коррекции со всеми признаками расчётов (выходные параметры документа смены).</summary>
+    public int DocumentsCounter { get; private set; }
+
+    /// <summary>Номер чека закрытия смены.</summary>
+    public int ShiftClosingCheckNumber { get; private set; }
+
+    /// <summary>Остаток наличных в денежном ящике.</summary>
+    public decimal CashBalance { get; private set; }
+
+    /// <summary>Необнуляемая сумма продаж — GetOverAll.</summary>
+    public decimal NonZeroSum { get; private set; }
+
+    /// <summary>Сумма внесений за смену.</summary>
+    public decimal ShiftIncomeSum { get; private set; }
+
+    /// <summary>Количество внесений за смену.</summary>
+    public int ShiftIncomeCount { get; private set; }
+
+    /// <summary>Сумма выемок за смену.</summary>
+    public decimal ShiftOutcomeSum { get; private set; }
+
+    /// <summary>Количество выемок за смену.</summary>
+    public int ShiftOutcomeCount { get; private set; }
+
+    /// <summary>Номер денежного ящика.</summary>
+    public int DrawerNumber { get; private set; }
+
+    /// <summary>Документ обработан успешно.</summary>
+    public bool IsProcessed { get; private set; }
+
+    /// <summary>Версия ФФД документа.</summary>
+    public string FnFFDVersion { get; private set; } = "";
+
+    /// <summary>Тип документа.</summary>
+    public CheckType? TaskType { get; private set; }
+
+    /// <summary>Пул документа.</summary>
+    public string PoolId { get; private set; } = "";
+
+    /// <summary>Код результата обработки документа.</summary>
+    public int ResultCode { get; private set; }
+
+    /// <summary>Описание результата обработки документа.</summary>
+    public string ResultDescription { get; private set; } = "";
+
+    // ── Задание в очереди: GetTaskStatus ──
+
+    /// <summary>Статус отправки задания на печать.</summary>
+    public QueueTaskStatus? SentToPrint { get; private set; }
+
+    /// <summary>Позиция задания в очереди.</summary>
+    public int NumberInQueue { get; private set; }
+
+    /// <summary>Размер очереди.</summary>
+    public int QueueSize { get; private set; }
 
     /// <summary>
-    /// Регистрационный номер ККТ (РНМ)
+    /// Дата и время: постановки задания в обработку (GetTaskStatus) или формирования документа
+    /// (выходные параметры смены и отчётов — открытие и закрытие смены, X-отчёт, отчёт о расчётах).
     /// </summary>
-    public string RnNumber { get; set; } = "";
+    public System.DateTime? DateTime { get; private set; }
+
+    // ── ФН и организация: ReadHeader, блок Fn в ReadKktInfo, ReadWarnings, ReadBacklog ──
+
+    /// <summary>Номер ФН.</summary>
+    public string FnSerialNumber { get; private set; } = "";
+
+    /// <summary>Регистрационный номер ККТ (РНМ).</summary>
+    public string RnNumber { get; private set; } = "";
+
+    /// <summary>Адрес сайта ФНС.</summary>
+    public string FnFnsUrl { get; private set; } = "";
+
+    /// <summary>Срок действия ФН.</summary>
+    public string FnValidityDate { get; private set; } = "";
+
+    /// <summary>Остаток ресурса ФН в днях.</summary>
+    public int ResourcesFn { get; private set; }
+
+    /// <summary>Название организации.</summary>
+    public string OrganizationInfo { get; private set; } = "";
+
+    /// <summary>ИНН организации.</summary>
+    public string FnVatin { get; private set; } = "";
+
+    /// <summary>Наименование ОФД.</summary>
+    public string FnOfdName { get; private set; } = "";
+
+    /// <summary>ИНН ОФД.</summary>
+    public string FnOfdVatin { get; private set; } = "";
+
+    /// <summary>Адрес расчётов.</summary>
+    public string FnSaleAddress { get; private set; } = "";
+
+    /// <summary>Место расчётов.</summary>
+    public string FnSaleLocation { get; private set; } = "";
+
+    /// <summary>Критическая ошибка ФН.</summary>
+    public bool FnWarningsIsCriticalError { get; private set; }
+
+    /// <summary>Память ФН переполнена.</summary>
+    public bool FnWarningsIsMemoryOverflow { get; private set; }
+
+    /// <summary>Требуется срочная замена ФН.</summary>
+    public bool FnWarningsIsNeedReplacement { get; private set; }
+
+    /// <summary>Превышено время ожидания ответа от ОФД.</summary>
+    public bool FnWarningsIsOfdTimeout { get; private set; }
+
+    /// <summary>Исчерпан ресурс ФН.</summary>
+    public bool FnWarningsIsResourceExhausted { get; private set; }
+
+    /// <summary>Количество непереданных в ОФД документов.</summary>
+    public long BacklogDocumentsCounter { get; private set; }
+
+    /// <summary>Номер первого непереданного документа.</summary>
+    public long BacklogDocumentFirstNumber { get; private set; }
+
+    /// <summary>Дата и время первого непереданного документа.</summary>
+    public System.DateTime? BacklogDocumentFirstDateTime { get; private set; }
+
+    // ── Статус ККТ: ReadStatus ──
+
+    /// <summary>ФН присутствует.</summary>
+    public bool IsFnPresent { get; private set; }
+
+    /// <summary>ФН в состоянии ошибки.</summary>
+    public bool IsFnError { get; private set; }
+
+    /// <summary>Информационная система маркировки недоступна.</summary>
+    public bool IsIsmDisconnected { get; private set; }
+
+    /// <summary>Оператор фискальных данных недоступен.</summary>
+    public bool IsOfdDisconnected { get; private set; }
+
+    /// <summary>Смена открыта.</summary>
+    public bool IsShiftOpened { get; private set; }
+
+    /// <summary>Смена истекла.</summary>
+    public bool IsShiftExpired { get; private set; }
+
+    /// <summary>Денежный ящик открыт.</summary>
+    public bool IsDrawerOpened { get; private set; }
+
+    /// <summary>Наличие чековой ленты.</summary>
+    public bool IsCheckPaperPresent { get; private set; }
+
+    /// <summary>Наличие контрольной ленты.</summary>
+    public bool IsControlPaperPresent { get; private set; }
+
+    /// <summary>Сумма выручки за смену.</summary>
+    public decimal TotalSum { get; private set; }
+
+    /// <summary>Время открытия смены.</summary>
+    public System.DateTime? OpenShiftDate { get; private set; }
+
+    /// <summary>Время на Сервере ККМ: время получения статуса (GetStatus) или документа (печать, отчёты, получение документа).</summary>
+    public System.DateTime ServerTime { get; private set; }
+
+    /// <summary>Время в часах ККТ.</summary>
+    public System.DateTime DeviceTime { get; private set; }
+
+    /// <summary>Описание ошибки устройства по данным драйвера.</summary>
+    public string ErrorCodeDescription { get; private set; } = "";
+
+    /// <summary>Статус лицензии Сервера ККМ.</summary>
+    public LicenseStatus? LicenseStatus { get; private set; }
+
+    // ── ККТ и драйвер: ReadDevice, блок Driver в ReadKktInfo, GetLineLength ──
+
+    /// <summary>Модель ККТ.</summary>
+    public string DeviceModel { get; private set; } = "";
+
+    /// <summary>Заводской номер ККТ.</summary>
+    public string DeviceSerialNumber { get; private set; } = "";
+
+    /// <summary>Версия прошивки ККТ.</summary>
+    public string DeviceFirmwareVersion { get; private set; } = "";
+
+    /// <summary>Версия конфигурации прошивки ККТ.</summary>
+    public string DeviceConfigurationVersion { get; private set; } = "";
+
+    /// <summary>Версия ФФД.</summary>
+    public string DeviceFfdVersion { get; private set; } = "";
+
+    /// <summary>Версия ФФД ФН.</summary>
+    public string DeviceFnFfdVersion { get; private set; } = "";
+
+    /// <summary>Тип устройства.</summary>
+    public DeviceClass? DeviceClass { get; private set; }
+
+    /// <summary>Часовая зона ККТ.</summary>
+    public CheckTimeZone? DeviceTimeZone { get; private set; }
+
+    /// <summary>Фискальный режим ККТ.</summary>
+    public bool DeviceIsFiscal { get; private set; }
+
+    /// <summary>Ширина строки чека в символах.</summary>
+    public int DeviceLineLength { get; private set; }
+
+    /// <summary>Ширина печатной области в пикселях.</summary>
+    public int DeviceLineLengthPixels { get; private set; }
+
+    /// <summary>Тип драйвера.</summary>
+    public string DriverType { get; private set; } = "";
+
+    /// <summary>Версия драйвера.</summary>
+    public string DriverVersion { get; private set; } = "";
+
+    /// <summary>Производитель драйвера.</summary>
+    public string DriverVendor { get; private set; } = "";
+
+    // ── Сервер: Ping, GetVersion ──
+
+    /// <summary>Версия Сервера ККМ.</summary>
+    public string ServerVersion { get; private set; } = "";
+
+    /// <summary>Наименование продукта Сервера ККМ.</summary>
+    public string Product { get; private set; } = "";
+
+    // ── Маркировка: RequestKM, GetProcessingKMResult, VerifyMarking ──
+
+    /// <summary>Связь с ОИСМ есть на момент запроса.</summary>
+    public bool IsmConnected { get; private set; }
+
+    /// <summary>Формат кода маркировки корректен.</summary>
+    public bool FormatChecking { get; private set; }
+
+    /// <summary>Код маркировки проверен фискальным накопителем.</summary>
+    public bool Checking { get; private set; }
+
+    /// <summary>Результат проверки кода маркировки фискальным накопителем положительный.</summary>
+    public bool CheckingResult { get; private set; }
+
+    /// <summary>Штрихкод после приведения к виду со спецсимволами GS.</summary>
+    public string MarkingBarcode { get; private set; } = "";
+
+    /// <summary>Итог проверки кода маркировки в ОИСМ (поле Result).</summary>
+    public bool KmResult { get; private set; }
+
+    /// <summary>Статус информации о коде маркировки (тег 2109).</summary>
+    public int? StatusInfo { get; private set; }
+
+    /// <summary>Код обработки запроса (тег 2105).</summary>
+    public int HandleCode { get; private set; }
+
+    /// <summary>Статус получения результата от ОИСМ: 0 — получен, 1 — ещё нет, 2 — не может быть получен.</summary>
+    public int RequestStatus { get; private set; }
+
+    /// <summary>Результат совместной онлайн-проверки одного кода.</summary>
+    public CodeMarkInfo? CodeMarkInfo { get; private set; }
+
+    /// <summary>Код результата обращения к сервису проверки кодов.</summary>
+    public int MarkingAnswerCode { get; private set; }
+
+    /// <summary>Описание результата проверки кодов.</summary>
+    public string MarkingDescription { get; private set; } = "";
+
+    /// <summary>Идентификатор запроса в сервисе проверки.</summary>
+    public string ReqId { get; private set; } = "";
+
+    /// <summary>Время проверки, Unix-время в миллисекундах.</summary>
+    public long ReqTimestamp { get; private set; }
+
+    /// <summary>Статус локального модуля.</summary>
+    public LocalModuleStatus? MarkingModuleStatus { get; private set; }
+
+    /// <summary>Нужно скачать или обновить локальную базу модуля.</summary>
+    public bool RequiresDownload { get; private set; }
+
+    /// <summary>Время последнего обновления локальной базы. 0 — нет данных.</summary>
+    public long MarkingLastUpdate { get; private set; }
+
+    /// <summary>Время последней синхронизации с ГИС МТ. 0 — нет данных.</summary>
+    public long MarkingLastSync { get; private set; }
+
+    /// <summary>Проверка выполнена офлайн через локальный модуль.</summary>
+    public bool IsCheckedOffline { get; private set; }
+
+    /// <summary>Версия локального модуля.</summary>
+    public string MarkingModuleVersion { get; private set; } = "";
+
+    /// <summary>Идентификатор экземпляра локального модуля.</summary>
+    public string MarkingModuleId { get; private set; } = "";
+
+    /// <summary>Адрес локального модуля, к которому было обращение.</summary>
+    public string MarkingServiceUrl { get; private set; } = "";
+
+    /// <summary>Результаты проверки по каждому коду.</summary>
+    public IReadOnlyList<CodeMarkInfo> MarkingCodes { get; private set; } = [];
+
+    // Выходные свойства — все свойства с private set и DocId, ShiftNumber, CheckNumber, CashAmount (вход и выход).
+    // Перед разбором каждого ответа все они сбрасываются — новое свойство с private set попадает сюда само.
+    private static readonly PropertyInfo[] ResponseProperties = typeof(SkkmConnector).GetProperties()
+        .Where(p => p.Name is nameof(DocId) or nameof(ShiftNumber) or nameof(CheckNumber) or nameof(CashAmount) || p.SetMethod is { IsPrivate: true })
+        .ToArray();
 
     /// <summary>
-    /// Адрес сайта ФНС
-    /// </summary>
-    public string FnsUrl { get; set; } = "";
-
-    /// <summary>
-    /// Время на сервере ККМ
-    /// </summary>
-    public string ServerDateTime { get; set; } = "";
-
-    /// <summary>
-    /// Дата и время документа по часам ФН 
-    /// </summary>
-    public string FiscalDateTime { get; set; } = "";
-
-    /// <summary>
-    /// Время ККТ
-    /// </summary>
-    public string DeviceDateTime { get; set; } = "";
-
-    /// <summary>
-    /// Время ПК (компьютера сервера ККМ) на момент получения статуса. Заполняется из статуса ККТ.
-    /// </summary>
-    public DateTime ComputerTime { get; set; }
-
-    /// <summary>
-    /// Время в часах ККТ на момент получения статуса. Заполняется из статуса ККТ.
-    /// </summary>
-    public DateTime DeviceTime { get; set; }
-    /// <summary>
-    /// Состояние смены.
-    /// </summary>
-    public ShiftState? CurrentShiftState { get; set; }
-
-    /// <summary>
-    /// Очередь непереданных в ОФД документов (структура-хранилище).
-    /// </summary>
-    private Backlog? _backlog;
-
-    /// <summary>
-    /// Срок действия ФН.
-    /// </summary>
-    public string FnValidityDate { get; set; } = "";
-
-    /// <summary>
-    /// Остаток ресурса ФН в днях.
-    /// </summary>
-    public int FnDaysResources { get; set; }
-
-    /// <summary>
-    /// Номер ФН
-    /// </summary>
-    public string FnNumber { get; set; } = "";
-
-    /// <summary>
-    /// ФН присутствует
-    /// </summary>
-    public bool IsFnPresent { get; set; }
-
-    /// <summary>
-    /// Фискальный режим ККТ. Выходное поле: заполняется из последнего ответа, где этот признак есть —
-    /// информации о ККТ (<see cref="GetKktInfo"/>), статуса (<see cref="GetStatus"/>) или фискализации.
-    /// Для привязки к конкретному источнику используйте <see cref="StatusIsFiscal"/> / <see cref="CheckIsFiscal"/>.
-    /// </summary>
-    public bool IsFiscal { get; set; }
-
-    /// <summary>
-    /// Предупреждения ФН из ответа.
-    /// </summary>
-    internal Warnings? FnWarnings { get; set; }
-
-    /// <summary>
-    /// Критическая ошибка ФН.
-    /// </summary>
-    public bool FnWarningsIsCriticalError => FnWarnings?.CriticalError ?? false;
-
-    /// <summary>
-    /// Память ФН переполнена.
-    /// </summary>
-    public bool FnWarningsIsMemoryOverflow => FnWarnings?.MemoryOverflow ?? false;
-
-    /// <summary>
-    /// Требуется срочная замена ФН.
-    /// </summary>
-    public bool FnWarningsIsNeedReplacement => FnWarnings?.NeedReplacement ?? false;
-
-    /// <summary>
-    /// Превышено время ожидания ответа от ОФД.
-    /// </summary>
-    public bool FnWarningsIsOfdTimeout => FnWarnings?.OfdTimeout ?? false;
-
-    /// <summary>
-    /// Исчерпан ресурс ФН.
-    /// </summary>
-    public bool FnWarningsIsResourceExhausted => FnWarnings?.ResourceExhausted ?? false;
-
-    /// <summary>
-    /// Количество документов в смене (из фискального ответа).
-    /// </summary>
-    public int ShiftDocumentsCount { get; set; }
-
-    /// <summary>
-    /// Номер чека закрытия смены (из фискального ответа).
-    /// </summary>
-    public int ShiftClosingCheckNumber { get; set; }
-
-    /// <summary>
-    /// Модель ККТ (из фискального ответа).
-    /// </summary>
-    public string DeviceModel { get; set; } = "";
-
-    /// <summary>
-    /// Заводской номер ККТ (из фискального ответа).
-    /// </summary>
-    public string DeviceSerialNumber { get; set; } = "";
-
-    /// <summary>
-    /// Версия прошивки ККТ (из фискального ответа).
-    /// </summary>
-    public string DeviceFirmwareVersion { get; set; } = "";
-
-    /// <summary>
-    /// Версия конфигурации прошивки ККТ (из фискального ответа).
-    /// </summary>
-    public string DeviceConfigurationVersion { get; set; } = "";
-
-    /// <summary>
-    /// Версия ФФД (из фискального ответа).
-    /// </summary>
-    public string DeviceFfdVersion { get; set; } = "";
-
-    /// <summary>
-    /// Версия ФФД ФН (из фискального ответа).
-    /// </summary>
-    public string FnFfdVersion { get; set; } = "";
-
-    /// <summary>
-    /// Тип (класс) устройства (из фискального ответа).
-    /// </summary>
-    public DeviceClass DeviceClass { get; set; }
-
-    /// <summary>
-    /// Часовая зона устройства (из фискального ответа).
-    /// </summary>
-    public int DeviceTimeZone { get; set; }
-
-    #endregion
-
-    /// <summary>
-    /// Сбрасывает ВСЕ данные ответа (плоские поля и объекты), чтобы результат
-    /// каждого запроса отражал только сам себя и не оставался от предыдущего вызова.
-    /// Не трогает вход запроса (для него — <see cref="Clear"/>) и данные подключения.
+    /// Сброс выходных свойств
     /// </summary>
     private void ResetResponse()
     {
-        // Плоские скаляры ответа
-        FiscalSign = "";
-        FnNumber = "";
-        ShiftNumber = 0;
-        CheckNumber = 0;
-        CheckNumberInShift = 0;
-        RnNumber = "";
-        FnsUrl = "";
-        DocumentId = "";
-        ServerDateTime = "";
-        FiscalDateTime = "";
-        DeviceDateTime = "";
-        ComputerTime = default;
-        DeviceTime = default;
-        CurrentShiftState = null;
-        _backlog = null;
-        FnValidityDate = "";
-        FnDaysResources = 0;
-        IsFnPresent = false;
-        IsFiscal = false;
-        FnWarnings = null;
-        CashBalance = 0;
-        NonZeroSum = 0;
-        ShiftDocumentsCount = 0;
-        ShiftClosingCheckNumber = 0;
-        LineLength = 0;
-        LineLengthPixels = 0;
-        DeviceModel = "";
-        DeviceSerialNumber = "";
-        DeviceFirmwareVersion = "";
-        DeviceConfigurationVersion = "";
-        DeviceFfdVersion = "";
-        FnFfdVersion = "";
-        DeviceClass = default;
-        DeviceTimeZone = 0;
+        foreach (var p in ResponseProperties)
+            p.SetValue(this, EmptyValue(p.PropertyType));
+    }
 
-        // Объекты ответа
-        Check = null;
-        Checks = [];
-        Shifts = [];
-        Status = null;
-        ShiftStatus = null;
-        ShiftTotals = null;
-        OverallTotals = null;
-        Kkt = null;
-        Devices = [];
-        Pictures = [];
-        PictureBase64Result = "";
-        TaskStatus = null;
-        PrintForm = [];
-        Pools = [];
-        Queue = [];
-        QueueTask = null;
-        Operation = null;
-        OperationHistory = [];
-        OperationTlv = "";
-        OperationKm = [];
-        RelatedOperations = [];
-        Operations = [];
-        PrintTemplate = null;
-        Templates = [];
-        CheckTemplate = null;
-        CheckTemplateDocument = null;
-        CheckTemplates = [];
-        FiscalizationDocument = null;
-        Fiscalizations = [];
-        MarkingCheck = null;
-        MarkingProcessing = null;
-        MarkingVerify = null;
-        ServerVersion = "";
-        ServerProduct = "";
+    private static object? EmptyValue(Type type)
+    {
+        if (type == typeof(string))
+            return "";
+        if (type.IsArray)
+            return Array.CreateInstance(type.GetElementType()!, 0);
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
+            return Array.CreateInstance(type.GetGenericArguments()[0], 0);
+        return null;
     }
 }

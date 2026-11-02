@@ -18,6 +18,12 @@ namespace RBSoftSkkm;
 /// PartiallyReturned - Часть товара возвращена
 /// </para>
 /// <para>
+/// PieceInSale - Штучный товар в стадии реализации
+/// </para>
+/// <para>
+/// MeasuredSold - Мерный товар реализован
+/// </para>
+/// <para>
 /// Unchanged - Статус не изменился
 /// </para>
 /// </summary>
@@ -47,6 +53,16 @@ public enum MarkingPlannedStatus
     /// Часть товара возвращена.
     /// </summary>
     PartiallyReturned = 4,
+
+    /// <summary>
+    /// Штучный товар в стадии реализации.
+    /// </summary>
+    PieceInSale = 5,
+
+    /// <summary>
+    /// Мерный товар реализован.
+    /// </summary>
+    MeasuredSold = 6,
 
     /// <summary>
     /// Статус не изменился.
