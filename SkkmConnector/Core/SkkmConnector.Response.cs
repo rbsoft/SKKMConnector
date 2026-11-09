@@ -273,6 +273,8 @@ public sealed partial class SkkmConnector
             TerminalId = d.Str("TerminalId");
         if (d.Get("CashierName").Exists())
             CashierName = d.Str("CashierName");
+        else if (d.Get("DocumentHeader").Get("Cashier").Exists())
+            CashierName = d.Get("DocumentHeader").Str("Cashier");
         if (d.Get("CashierVatin").Exists())
             CashierVatin = d.Str("CashierVatin");
         if (d.Get("Electronically").Exists())
@@ -317,52 +319,6 @@ public sealed partial class SkkmConnector
     {
         var value = payments.Get(stored);
         return value.Exists() ? payments.Dec(stored) : payments.Dec(request);
-    }
-
-    /// <summary>
-    /// ReportValues списка (Get…List): по документу — его основные поля с ключом «[номер] Имя»,
-    /// имена — как у свойств коннектора для одного документа. Вложенные блоки (строки, ККТ, итоги) не выводятся.
-    /// Номер смены и ФД документа смены — из выходных параметров, если их нет в самом документе.
-    /// </summary>
-    private void ReadDocuments(JsonElement list)
-    {
-        var rows = new List<ReportValue>();
-        var index = 0;
-        foreach (var d in list.Items())
-        {
-            var output = d.Get("OutputParameters");
-            var header = d.Get("DocumentHeader");
-            void Add(string name, JsonElement value, string description, string? text = null)
-            {
-                if (value.Exists())
-                    rows.Add(new ReportValue { Key = $"[{index}] {name}", Value = text ?? value.Text(), Description = description });
-            }
-            JsonElement NonZero(JsonElement value, JsonElement fallback)
-                => !fallback.Exists() || value.Exists() && value.Text() is not ("" or "0") ? value : fallback;
-
-            Add("DocId", d.Get("DocId"), "Идентификатор документа");
-            Add("TaskType", d.Get("TaskType"), "Тип документа", d.Enum<CheckType>("TaskType")?.ToString());
-            Add("ServerTime", d.Get("Date"), "Время на сервере ККМ");
-            Add("FiscalDatetime", d.Get("FiscalDate"), "Дата и время документа по часам ФН");
-            Add("ShiftNumber", NonZero(d.Get("ShiftNumber"), output.Get("ShiftNumber")), "Номер смены");
-            Add("CheckNumber", NonZero(d.Get("DocNumber"), output.Get("CheckNumber")), "Номер фискального документа (ФД)");
-            Add("CheckNumberInShift", d.Get("DocNumberInShift"), "Номер чека за смену");
-            Add("FiscalSign", d.Get("FiscalSign"), "Фискальный признак документа");
-            Add("FnSerialNumber", d.Get("Fn"), "Номер ФН");
-            Add("RnNumber", header.Get("RnNumber"), "Регистрационный номер ККТ (РНМ)");
-            Add("OrganizationInfo", header.Get("OrganizationInfo"), "Организация");
-            Add("FnFFDVersion", d.Get("FfdVersion"), "Версия ФФД документа");
-            Add("FnSaleAddress", d.Get("SaleAddress"), "Адрес расчётов");
-            Add("FnSaleLocation", d.Get("SaleLocation"), "Место расчётов");
-            Add("DeviceName", d.Get("DeviceName"), "Имя устройства");
-            Add("TerminalId", d.Get("TerminalId"), "Идентификатор рабочего места");
-            Add("PoolId", d.Get("PoolId"), "Пул");
-            Add("ResultCode", d.Get("ResultCode"), "Код результата");
-            Add("ResultDescription", d.Get("ResultDescription"), "Описание результата");
-            Add("IsProcessed", d.Get("Processed"), "Успешная операция");
-            index++;
-        }
-        ReportValues = rows;
     }
 
     /// <summary>
@@ -553,25 +509,25 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Таблица ReportValues: поле Result, развёрнутое в строки «ключ — значение»
     /// </summary>
-    private static List<ReportValue> ToReportValues(JsonElement? result)
+    private static List<ReportValue> ToReportValues(JsonElement result)
     {
         var rows = new List<ReportValue>();
         void Add(string key, JsonElement value)
         {
+            string Child(string part) => key.Length == 0 ? part : $"{key} {part}";
             if (value.ValueKind == JsonValueKind.Object)
                 foreach (var property in value.EnumerateObject())
-                    Add(key.Length == 0 ? property.Name : $"{key}_{property.Name}", property.Value);
+                    Add(Child(property.Name), property.Value);
             else if (value.ValueKind == JsonValueKind.Array)
             {
                 var index = 0;
                 foreach (var item in value.EnumerateArray())
-                    Add($"{key}_{index++}", item);
+                    Add(Child($"[{index++}]"), item);
             }
             else if (key.Length > 0)
                 rows.Add(new ReportValue { Key = key, Value = EnumText(key, value) });
         }
-        if (result is { } value && value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
-            Add("", value);
+        Add("", result);
         return rows;
     }
 
@@ -604,7 +560,7 @@ public sealed partial class SkkmConnector
         var text = value.Text();
         if (value.ValueKind != JsonValueKind.Number)
             return text;
-        var name = key[(key.LastIndexOf('_') + 1)..];
+        var name = key[(key.LastIndexOf(' ') + 1)..];
         if (!ReportEnums.TryGetValue(name, out var type) || !int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
             return text;
         return Enum.IsDefined(type, number) ? Enum.GetName(type, number) ?? text : text;

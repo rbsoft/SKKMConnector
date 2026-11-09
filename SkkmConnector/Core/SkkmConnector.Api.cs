@@ -190,6 +190,9 @@ public sealed partial class SkkmConnector
     /// <summary>Возвращает результат операции внесения наличных по идентификатору операции (docId).</summary>
     public Task<bool> GetCashIn() => GetDocument("cashin", ReadCashDocument);
 
+    /// <summary>Список операций внесения наличных по кассе.</summary>
+    public Task<bool> GetCashInList() => GetDocumentList($"cashin/list?{DeviceQuery}");
+
     /// <summary>Возвращает результат операции выемки наличных по идентификатору операции (docId).</summary>
     public Task<bool> GetCashOut() => GetDocument("cashout", ReadCashDocument);
 

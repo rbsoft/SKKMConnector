@@ -1,6 +1,28 @@
 ## ИЗМЕНЕНИЯ
 
 
+* 1.34.21
+  - `GetCashInList`: `GET` `/cashin/list` — список внесений по кассе, массив в `ReportValues`.
+
+* 1.34.20
+  - `GetSlip`: в свойства документа — шапка, ККТ, кассир из `DocumentHeader.Cashier`. Строки печати (`Lines`) — в `ReportValues`.
+
+* 1.34.19
+  - Ключ в `ReportValues` для всех ответов: индекс массива в квадратных скобках, части через пробел. `[0] CheckItems [0] MeasureOfQuantity`, `[0] TrustedInFn`. Содержимое — весь JSON ответа, как в 1.34.18.
+
+* 1.34.18
+  - `ReportValues` снова как у коннектора 1С: ключ `_0_DocNumber`, `_0_DocumentHeader_OrganizationInfo`, `_0_Lines_0_Barcode_PictureBase64`. Весь JSON ответа, включая картинки штрихкода. Формат значений не менялся (`True`/`False`, перечисления именем элемента).
+  - Ответ списка больше не копируется через `JsonElement.Clone` перед разбором — разворачивание идёт по исходному JSON.
+
+* 1.34.17
+  - Списки документов: короткая выборка полей. Откатили в 1.34.18 — нужно как в 1С, весь JSON.
+
+* 1.34.16
+  - Ключ в `ReportValues`: индекс массива в квадратных скобках, части через пробел. `[0] CheckItems [0] MeasureOfQuantity`, `[0] TrustedInFn`.
+
+* 1.34.15
+  - Списки документов (`GetOpenShiftList`, `GetCloseShiftList`, `GetReportXList`, `GetReportSettlementList`, `GetCheckList`, `GetCorrection120List`, `GetCorrection105List`, `GetSlipList`): в `ReportValues` снова весь JSON ответа, как у коннектора 1С. Ключ элемента массива — `_0`, вложенное поле — `_0_CheckItems_0_Name`. Короткая выборка `[0] DocId` убрана.
+
 * 1.34.14
   - `MarkingPlannedStatus`: штучный товар в стадии реализации (`PieceInSale`, 5) и мерный товар реализован (`MeasuredSold`, 6).
   - `DeviceType`: ККТ-Лаб (`KktLab`, 6) и Торговый баланс (`TorgBalance`, 7).

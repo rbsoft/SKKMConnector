@@ -43,19 +43,22 @@ public sealed partial class SkkmConnector
             _callCts = cts;
         try
         {
-            var (ok, code, description, result) = await Send(method, path, body, cts.Token);
-
-            // Каждый ответ отражает только сам себя.
-            ResetResponse();
-            _ok = ok;
-            ErrorCode = code;
-            ErrorDescription = description;
-            ReportValues = ToReportValues(result);
-            if (result is { } r)
-                read?.Invoke(r);
-            // DocId теперь из ответа: в следующий чек коррекции 1.05 он сам не уйдёт.
-            _docIdFromResponse = true;
-            return _ok;
+            var (ok, code, description, doc) = await Send(method, path, body, cts.Token);
+            using (doc)
+            {
+                // Каждый ответ отражает только сам себя.
+                ResetResponse();
+                _ok = ok;
+                ErrorCode = code;
+                ErrorDescription = description;
+                var result = doc?.RootElement.Get("Result") ?? default;
+                ReportValues = ToReportValues(result);
+                if (result.Exists())
+                    read?.Invoke(result);
+                // DocId теперь из ответа: в следующий чек коррекции 1.05 он сам не уйдёт.
+                _docIdFromResponse = true;
+                return _ok;
+            }
         }
         finally
         {
@@ -66,7 +69,7 @@ public sealed partial class SkkmConnector
         }
     }
 
-    private async Task<(bool Ok, int Code, string Description, JsonElement? Result)> Send(
+    private async Task<(bool Ok, int Code, string Description, JsonDocument? Doc)> Send(
         HttpMethod method, string path, JsonObject? body, CancellationToken cancellation)
     {
         if (_disposed)
@@ -91,14 +94,11 @@ public sealed partial class SkkmConnector
 
             try
             {
-                using var doc = JsonDocument.Parse(text);
+                var doc = JsonDocument.Parse(text);
                 var root = doc.RootElement;
                 if (root.ValueKind == JsonValueKind.Object)
-                {
-                    var result = root.Get("Result");
-                    return (root.Bool("Success"), root.Int("Code"), root.Str("Description"),
-                        result.Exists() ? result.Clone() : null);
-                }
+                    return (root.Bool("Success"), root.Int("Code"), root.Str("Description"), doc);
+                doc.Dispose();
             }
             catch (JsonException)
             {
@@ -208,8 +208,8 @@ public sealed partial class SkkmConnector
         => GetDocumentList($"{path}?{DeviceQuery}&{DateQuery(FromDate, ToDate)}");
 
     /// <summary>
-    /// GET списка документов: основные поля каждого документа — в <see cref="ReportValues"/> («[номер] Имя»).
+    /// GET списка документов: весь Result в <see cref="ReportValues"/>.
     /// </summary>
     private Task<bool> GetDocumentList(string pathAndQuery)
-        => Call(HttpMethod.Get, pathAndQuery, null, ReadDocuments);
+        => Call(HttpMethod.Get, pathAndQuery);
 }

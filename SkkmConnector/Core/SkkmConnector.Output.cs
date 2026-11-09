@@ -19,8 +19,8 @@ public sealed partial class SkkmConnector
     // ── Таблицы ──
 
     /// <summary>
-    /// Таблица «ключ — значение»: поля ответа сервера (поле Result).
-    /// После Get…List — основные поля каждого документа с ключом «[номер] Имя» — ReadDocuments.
+    /// Таблица «ключ — значение»: поле Result, развёрнутое в строки.
+    /// Ключ: индекс массива в квадратных скобках, части через пробел — <c>[0] TrustedInFn</c>
     /// </summary>
     public IReadOnlyList<ReportValue> ReportValues { get; private set; } = [];
 

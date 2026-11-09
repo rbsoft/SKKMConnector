@@ -160,7 +160,7 @@ public sealed partial class SkkmConnector
         if (!string.IsNullOrEmpty(row.BarcodeValue))
             return Barcode(row.BarcodeType, row.BarcodeValue, row.BarcodeAlignment);
         if (row.lineStyle.HasValue)
-            return Obj(("SeparatorLine", Obj(("LineStyle", (int)row.lineStyle.Value))));
+            return Obj(("SeparatorLine", Obj(("lineStyle", (int)row.lineStyle.Value))));
         return TextLine(row.Text ?? "", row.Font, row.Alignment);
     }
 
@@ -263,7 +263,7 @@ public sealed partial class SkkmConnector
         }
 
         if (hasLineTag || (lineStyle != null && line.Length == 0))
-            return Obj(("SeparatorLine", Obj(("LineStyle", (int)(lineStyle ?? LineStyle.Solid)))));
+            return Obj(("SeparatorLine", Obj(("lineStyle", (int)(lineStyle ?? LineStyle.Solid)))));
         if (barcodeType != null)
             return Barcode(barcodeType.Value, line.Trim(), alignment);
         return Obj(("TextString", Obj(

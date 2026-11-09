@@ -6,7 +6,7 @@ namespace RBSoftSkkm
     public sealed class ReportValue
     {
         /// <summary>
-        /// Ключ поля в JSON ответа. После Get…List — «[номер документа] Имя», например <c>[0] ShiftNumber</c>.
+        /// Ключ поля в JSON ответа
         /// </summary>
         public string Key { get; init; } = "";
 
@@ -17,7 +17,7 @@ namespace RBSoftSkkm
         public string Value { get; init; } = "";
 
         /// <summary>
-        /// Описание поля. Заполняется после Get…List.
+        /// Описание поля.
         /// </summary>
         public string Description { get; init; } = "";
     }

@@ -21,16 +21,10 @@ public sealed partial class SkkmConnector
     /// </summary>
     public decimal CashAmount { get; set; }
 
-    // Картинки
-
-    // Слип
-
     /// <summary>
     /// Текст нефискального документа.
     /// </summary>
     public string Text { get; set; } = "";
-
-    // Шаблоны
 
     // Чек
 
@@ -522,8 +516,6 @@ public sealed partial class SkkmConnector
     /// Признак подтверждения кода маркировки.
     /// </summary>
     public KmConfirmationType ConfirmationType { get; set; }
-
-    // Параметры отдельных операций: отчёты, очередь, картинки, маркировка, фискализация.
 
     /// <summary>
     /// Коды маркировки для проверки — одной строкой через запятую:
