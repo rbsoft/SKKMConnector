@@ -33,10 +33,8 @@ public sealed partial class SkkmConnector
         }).ToArray();
 
         // Ширину строки в GetKktInfo присылает и статус ККТ — нулём из устройства не затираем.
-        if (d.Int("LineLength") > 0)
-            DeviceLineLength = d.Int("LineLength");
-        if (d.Int("LineLengthPixels") > 0)
-            DeviceLineLengthPixels = d.Int("LineLengthPixels");
+        DeviceLineLength = d.IntOr("LineLength", DeviceLineLength);
+        DeviceLineLengthPixels = d.IntOr("LineLengthPixels", DeviceLineLengthPixels);
     }
 
     /// <summary>
@@ -49,9 +47,12 @@ public sealed partial class SkkmConnector
         CheckNumberInShift = s.Int("DocNumberInShift");
         IsShiftOpened = s.Bool("IsShiftOpened");
         IsShiftExpired = s.Bool("IsShiftExpired");
-        ShiftState = IsShiftExpired ? RBSoftSkkm.ShiftState.Expired
-            : IsShiftOpened ? RBSoftSkkm.ShiftState.Opened
-            : RBSoftSkkm.ShiftState.Closed;
+        if (IsShiftExpired)
+            ShiftState = RBSoftSkkm.ShiftState.Expired;
+        else if (IsShiftOpened)
+            ShiftState = RBSoftSkkm.ShiftState.Opened;
+        else
+            ShiftState = RBSoftSkkm.ShiftState.Closed;
         CashBalance = s.Dec("CashSum");
         TotalSum = s.Dec("TotalSum");
         OpenShiftDate = s.DateOrNull("OpenShiftTime");
@@ -68,6 +69,8 @@ public sealed partial class SkkmConnector
         IsCheckPaperPresent = s.Bool("IsCheckPaperPresent");
         IsControlPaperPresent = s.Bool("IsControlPaperPresent");
         ErrorCodeDescription = s.Str("ErrorCodeDescription");
+        if (s.Get("ErrorCode").Exists())
+            ErrorCode = s.Int("ErrorCode");
         LicenseStatus = s.Enum<LicenseStatus>("LicenseStatus");
         ReadWarnings(s.Get("Warnings"));
         ReadBacklog(s.Get("Backlog"));
@@ -113,8 +116,9 @@ public sealed partial class SkkmConnector
         FnSerialNumber = fn.Str("SerialNumber");
         RnNumber = fn.Str("RnNumber");
         FnFnsUrl = fn.Str("FnsUrl");
-        if (fn.Date("ValidityDate") is var validity && validity != default)
-            FnValidityDate = validity.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var validityDate = fn.Date("ValidityDate");
+        if (validityDate != default)
+            FnValidityDate = validityDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         OrganizationInfo = fn.Str("OrganizationName");
         FnVatin = fn.Str("Vatin");
         FnOfdName = fn.Get("Ofd").Str("Name");
@@ -136,27 +140,23 @@ public sealed partial class SkkmConnector
     {
         if (!o.Exists())
             return;
-        if (o.Enum<ShiftState>("ShiftState") is { } shiftState)
-            ShiftState = shiftState;
-        if (o.Int("ShiftNumber") > 0)
-            ShiftNumber = o.Int("ShiftNumber");
-        if (o.Int("CheckNumber") > 0)
-            CheckNumber = LastCheckNumber = o.Int("CheckNumber");
-        if (o.Int("NumberOfChecks") > 0)
-            NumberOfChecks = o.Int("NumberOfChecks");
-        if (o.Int("NumberOfDocuments") > 0)
-            NumberOfDocuments = o.Int("NumberOfDocuments");
+        ShiftState = o.Enum<ShiftState>("ShiftState") ?? ShiftState;
+        ShiftNumber = o.IntOr("ShiftNumber", ShiftNumber);
+        CheckNumber = o.IntOr("CheckNumber", CheckNumber);
+        LastCheckNumber = o.IntOr("CheckNumber", LastCheckNumber);
+        NumberOfChecks = o.IntOr("NumberOfChecks", NumberOfChecks);
+        NumberOfDocuments = o.IntOr("NumberOfDocuments", NumberOfDocuments);
         DocumentsCounter = o.Int("DocumentsCounter");
         DateTime = o.DateOrNull("DateTime");
-        if (o.Int("ShiftClosingCheckNumber") > 0)
-            ShiftClosingCheckNumber = o.Int("ShiftClosingCheckNumber");
-        if (o.Int("ResourcesFn") > 0)
-            ResourcesFn = o.Int("ResourcesFn");
-        if (o.Str("FnValidityDate").Length > 0)
-            FnValidityDate = o.Str("FnValidityDate");
+        ShiftClosingCheckNumber = o.IntOr("ShiftClosingCheckNumber", ShiftClosingCheckNumber);
+        ResourcesFn = o.IntOr("ResourcesFn", ResourcesFn);
+        FnValidityDate = o.StrOr("FnValidityDate", FnValidityDate);
         CashBalance = o.Dec("CashBalance");
         ReadBacklog(o.Get("Backlog"));
-        ReadWarnings(o.Get("FnWarnings").Exists() ? o.Get("FnWarnings") : o.Get("Warnings"));
+        if (o.Get("FnWarnings").Exists())
+            ReadWarnings(o.Get("FnWarnings"));
+        else
+            ReadWarnings(o.Get("Warnings"));
     }
 
     /// <summary>
@@ -173,11 +173,19 @@ public sealed partial class SkkmConnector
     }
 
     /// <summary>
-    /// Итоги смены: счётчики, внесения, выемки (GetTotals, Z-отчёт).
+    /// Итоги смены: счётчики, внесения, выемки (GetTotals, документ смены).
     /// </summary>
     private void ReadShiftTotal(JsonElement t)
     {
         Counter = ReadCounters(t.Get("Counters"));
+        ReadShiftIncomeOutcome(t);
+    }
+
+    /// <summary>
+    /// Внесения и выемки за смену: ShiftIncome и ShiftOutcome.
+    /// </summary>
+    private void ReadShiftIncomeOutcome(JsonElement t)
+    {
         ShiftIncomeSum = t.Get("ShiftIncome").Dec("Sum");
         ShiftIncomeCount = t.Get("ShiftIncome").Int("Count");
         ShiftOutcomeSum = t.Get("ShiftOutcome").Dec("Sum");
@@ -190,34 +198,47 @@ public sealed partial class SkkmConnector
     private static IReadOnlyList<Counter> ReadCounters(JsonElement c)
     {
         var rows = new List<Counter>();
-        void Add(string operation, JsonElement data, JsonElement correction)
-        {
-            if (!data.Exists() && !correction.Exists())
-                return;
-            var payments = data.Get("Payments");
-            rows.Add(new Counter
-            {
-                Operation = operation,
-                Count = data.Int("Count"),
-                Sum = data.Dec("Sum"),
-                SalesCorrectionCount = correction.Int("Count"),
-                SalesCorrectionSum = correction.Dec("Sum"),
-                Cash = payments.Dec("Cash"),
-                Electronically = payments.Dec("Electronically"),
-                Prepaid = payments.Dec("Prepaid"),
-                Credit = payments.Dec("Credit"),
-                Barter = payments.Dec("Barter"),
-                DiscountSum = data.Get("Discount").Dec("Sum"),
-                DiscountCount = data.Get("Discount").Int("Count"),
-                AddingSum = data.Get("Adding").Dec("Sum"),
-                AddingCount = data.Get("Adding").Int("Count"),
-            });
-        }
-        Add("Приход", c.Get("Sales"), c.Get("SalesCorrection"));
-        Add("Возврат прихода", c.Get("SalesReturn"), c.Get("SalesReturnCorrection"));
-        Add("Расход", c.Get("Purchases"), c.Get("PurchasesCorrection"));
-        Add("Возврат расхода", c.Get("PurchasesReturn"), c.Get("PurchasesReturnCorrection"));
+        AddCounter(rows, "Приход", c.Get("Sales"), c.Get("SalesCorrection"));
+        AddCounter(rows, "Возврат прихода", c.Get("SalesReturn"), c.Get("SalesReturnCorrection"));
+        AddCounter(rows, "Расход", c.Get("Purchases"), c.Get("PurchasesCorrection"));
+        AddCounter(rows, "Возврат расхода", c.Get("PurchasesReturn"), c.Get("PurchasesReturnCorrection"));
         return rows;
+    }
+
+    /// <summary>
+    /// Строка счётчиков одной операции. Нет ни операции, ни её коррекции — строка не добавляется.
+    /// </summary>
+    private static void AddCounter(List<Counter> rows, string operation, JsonElement data, JsonElement correction)
+    {
+        if (!data.Exists() && !correction.Exists())
+            return;
+
+        // Скидка и надбавка коррекции затирают скидку и надбавку операции.
+        var discount = data.Get("Discount");
+        if (correction.Get("Discount").Exists())
+            discount = correction.Get("Discount");
+        var adding = data.Get("Adding");
+        if (correction.Get("Adding").Exists())
+            adding = correction.Get("Adding");
+
+        var payments = data.Get("Payments");
+        rows.Add(new Counter
+        {
+            Operation = operation,
+            Count = data.Int("Count"),
+            Sum = data.Dec("Sum"),
+            SalesCorrectionCount = correction.Int("Count"),
+            SalesCorrectionSum = correction.Dec("Sum"),
+            Cash = payments.Dec("Cash"),
+            Electronically = payments.Dec("Electronically"),
+            Prepaid = payments.Dec("Prepaid"),
+            Credit = payments.Dec("Credit"),
+            Barter = payments.Dec("Barter"),
+            DiscountSum = discount.Dec("Sum"),
+            DiscountCount = discount.Int("Count"),
+            AddingSum = adding.Dec("Sum"),
+            AddingCount = adding.Int("Count"),
+        });
     }
 
     /// <summary>
@@ -236,7 +257,7 @@ public sealed partial class SkkmConnector
         PoolId = d.Str("PoolId");
         ResultCode = d.Int("ResultCode");
         ResultDescription = d.Str("ResultDescription");
-        IsProcessed = d.Bool("Processed");
+        IsProcessed = d.Bool("IsProcessed");
         FnFFDVersion = d.Str("FfdVersion");
         DrawerNumber = d.Int("DrawerNumber");
         ServerVersion = d.Str("ServerVersion");
@@ -257,12 +278,9 @@ public sealed partial class SkkmConnector
         }
 
         // Номера и наличные уже могли прийти из выходных параметров отчёта — не затираем нулями.
-        if (d.Int("ShiftNumber") > 0)
-            ShiftNumber = d.Int("ShiftNumber");
-        if (d.Int("DocNumber") > 0)
-            CheckNumber = d.Int("DocNumber");
-        if (d.Int("DocNumberInShift") > 0)
-            CheckNumberInShift = d.Int("DocNumberInShift");
+        ShiftNumber = d.IntOr("ShiftNumber", ShiftNumber);
+        CheckNumber = d.IntOr("DocNumber", CheckNumber);
+        CheckNumberInShift = d.IntOr("DocNumberInShift", CheckNumberInShift);
         if (d.Get("CashSum").Exists())
             CashBalance = d.Dec("CashSum");
 
@@ -279,10 +297,7 @@ public sealed partial class SkkmConnector
             CashierVatin = d.Str("CashierVatin");
         if (d.Get("Electronically").Exists())
             IsElectronically = d.Bool("Electronically");
-        if (d.Enum<TaxSystem>("TaxType") is { } taxType)
-            TaxVariant = taxType;
-        else if (d.Enum<TaxSystem>("TaxVariant") is { } taxVariant)
-            TaxVariant = taxVariant;
+        TaxVariant = d.Enum<TaxSystem>("TaxType") ?? d.Enum<TaxSystem>("TaxVariant") ?? TaxVariant;
 
         var payments = d.Get("Payments");
         if (payments.Exists())
@@ -294,31 +309,40 @@ public sealed partial class SkkmConnector
             CashProvision = Pay(payments, "Barter", "CashProvision");
         }
 
-        void Tax(string name, Action<decimal> set)
-        {
-            if (d.Get(name).Exists())
-                set(d.Dec(name));
-        }
-        Tax("TaxSumNone", v => SumTaxNone = v);
-        Tax("TaxSum0", v => SumTax0 = v);
-        Tax("TaxSum5", v => SumTax5 = v);
-        Tax("TaxSum7", v => SumTax7 = v);
-        Tax("TaxSum10", v => SumTax10 = v);
-        Tax("TaxSum18", v => SumTax18 = v);
-        Tax("TaxSum20", v => SumTax20 = v);
-        Tax("TaxSum22", v => SumTax22 = v);
-        Tax("TaxSum105", v => SumTax105 = v);
-        Tax("TaxSum107", v => SumTax107 = v);
-        Tax("TaxSum110", v => SumTax110 = v);
-        Tax("TaxSum118", v => SumTax118 = v);
-        Tax("TaxSum120", v => SumTax120 = v);
-        Tax("TaxSum122", v => SumTax122 = v);
+        SumTaxNone = TaxSum(d, "TaxSumNone", SumTaxNone);
+        SumTax0 = TaxSum(d, "TaxSum0", SumTax0);
+        SumTax5 = TaxSum(d, "TaxSum5", SumTax5);
+        SumTax7 = TaxSum(d, "TaxSum7", SumTax7);
+        SumTax10 = TaxSum(d, "TaxSum10", SumTax10);
+        SumTax18 = TaxSum(d, "TaxSum18", SumTax18);
+        SumTax20 = TaxSum(d, "TaxSum20", SumTax20);
+        SumTax22 = TaxSum(d, "TaxSum22", SumTax22);
+        SumTax105 = TaxSum(d, "TaxSum105", SumTax105);
+        SumTax107 = TaxSum(d, "TaxSum107", SumTax107);
+        SumTax110 = TaxSum(d, "TaxSum110", SumTax110);
+        SumTax118 = TaxSum(d, "TaxSum118", SumTax118);
+        SumTax120 = TaxSum(d, "TaxSum120", SumTax120);
+        SumTax122 = TaxSum(d, "TaxSum122", SumTax122);
     }
 
+    /// <summary>
+    /// Сумма оплаты. В сохранённом документе поле называется иначе, чем в запросе печати (PrePaid и AdvancePayment).
+    /// </summary>
     private static decimal Pay(JsonElement payments, string stored, string request)
     {
-        var value = payments.Get(stored);
-        return value.Exists() ? payments.Dec(stored) : payments.Dec(request);
+        if (payments.Get(stored).Exists())
+            return payments.Dec(stored);
+        return payments.Dec(request);
+    }
+
+    /// <summary>
+    /// Сумма НДС коррекции 1.05. Нет поля в ответе — остаётся <paramref name="current"/>.
+    /// </summary>
+    private static decimal? TaxSum(JsonElement d, string name, decimal? current)
+    {
+        if (d.Get(name).Exists())
+            return d.Dec(name);
+        return current;
     }
 
     /// <summary>
@@ -352,18 +376,34 @@ public sealed partial class SkkmConnector
         ReadOperationResult(r);
         FiscalSign = r.Str("fiscalSign");
         CheckNumber = r.Int("fiscalNumber");
+    }
+
+    /// <summary>
+    /// Открытие смены
+    /// </summary>
+    private void ReadOpenShift(JsonElement r)
+    {
+        ReadOperationResult(r);
         ReadDevice(r.Get("deviceInfo"));
     }
 
     /// <summary>
-    /// Результат открытия и закрытия смены, X-отчёта, отчёта о расчётах.
+    /// X-отчёт и отчёт о расчётах
     /// </summary>
-    private void ReadShiftResult(JsonElement r)
+    private void ReadReport(JsonElement r)
     {
         ReadOperationResult(r);
-        if (r.Get("shiftTotal").Exists())
-            ReadShiftTotal(r.Get("shiftTotal"));
         ReadOutputParameters(r.Get("outputParameters"));
+    }
+
+    /// <summary>
+    /// Z-отчёт
+    /// </summary>
+    private void ReadCloseShift(JsonElement r)
+    {
+        ReadOperationResult(r);
+        Counter = ReadCounters(r.Get("overallTotals").Get("Counters"));
+        ReadShiftIncomeOutcome(r.Get("shiftTotal"));
         ReadDevice(r.Get("deviceInfo"));
     }
 
@@ -373,13 +413,11 @@ public sealed partial class SkkmConnector
     /// </summary>
     private void ReadQueueTask(JsonElement r)
     {
-        if (r.Str("DocId").Length > 0)
-            DocId = r.Str("DocId");
+        DocId = r.StrOr("DocId", DocId);
         NumberInQueue = r.Int("NumberInQueue");
         ResultCode = r.Int("ResultCode");
         ResultDescription = r.Str("ResultDescription");
-        if (r.Str("FiscalSign").Length > 0)
-            FiscalSign = r.Str("FiscalSign");
+        FiscalSign = r.StrOr("FiscalSign", FiscalSign);
         var date = r.Date("Date");
         ReportValues =
         [
@@ -395,28 +433,30 @@ public sealed partial class SkkmConnector
         ];
     }
 
-    /// <summary>Ответ RequestKM: локальная проверка и, если сервер её приложил, онлайн-проверка кода.</summary>
+    /// <summary>Ответ RequestKM</summary>
     private void ReadRequestKm(JsonElement r)
     {
         IsmConnected = r.Bool("ISMConnected");
         FormatChecking = r.Bool("FormatChecking");
         Checking = r.Bool("Checking");
         CheckingResult = r.Bool("CheckingResult");
-        MarkingBarcode = r.Str("Barcode");
-        CodeMarkInfo = ReadCodeMark(r.Get("CodeMarkInfo"));
+        if (r.Get("Code").Exists())
+            ErrorCode = r.Int("Code");
+        if (r.Get("Description").Exists())
+            ErrorDescription = r.Str("Description");
     }
 
     /// <summary>Ответ GetProcessingKMResult.</summary>
     private void ReadProcessingKm(JsonElement r)
     {
-        if (r.Str("Guid").Length > 0)
-            Guid = r.Str("Guid");
+        Guid = r.StrOr("Guid", Guid);
         KmResult = r.Bool("Result");
         ResultCode = r.Int("ResultCode");
         StatusInfo = OptionalInt(r, "StatusInfo");
         HandleCode = r.Int("HandleCode");
         RequestStatus = r.Int("RequestStatus");
-        CodeMarkInfo = ReadCodeMark(r.Get("CodeMarkInfo"));
+        if (IsObject(r.Get("CodeMarkInfo")))
+            CodeMarkInfo = ReadCodeMark(r.Get("CodeMarkInfo"));
     }
 
     /// <summary>Ответ VerifyMarking, VerifyMarkingTsPiot и VerifyMarkingLmcz.</summary>
@@ -434,20 +474,23 @@ public sealed partial class SkkmConnector
         MarkingModuleVersion = r.Str("version");
         MarkingModuleId = r.Str("inst");
         MarkingServiceUrl = r.Str("serviceUrl");
-        MarkingCodes = r.Get("codes").Items().Select(ReadCodeMark).Where(mark => mark != null).Cast<CodeMarkInfo>().ToArray();
+        MarkingCodes = r.Get("codes").Items().Where(IsObject).Select(ReadCodeMark).ToArray();
     }
 
-    private static CodeMarkInfo? ReadCodeMark(JsonElement e)
+    private static bool IsObject(JsonElement e) => e.ValueKind == JsonValueKind.Object;
+
+    /// <summary>
+    /// Результат проверки одного кода маркировки.
+    /// </summary>
+    private static CodeMarkInfo ReadCodeMark(JsonElement e)
     {
-        if (e.ValueKind != JsonValueKind.Object)
-            return null;
         return new CodeMarkInfo
         {
             Cis = e.Str("cis"),
             DataMatrix = e.Str("dataMatrix"),
             Valid = e.Bool("valid"),
             PrintView = e.Str("printView"),
-            GroupIds = e.Get("groupIds").Items().Select(item => int.TryParse(item.Text(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : 0).ToArray(),
+            GroupIds = e.Get("groupIds").Items().Select(GroupId).ToArray(),
             Verified = e.Bool("verified"),
             Realizable = e.Bool("realizable"),
             Utilised = e.Bool("utilised"),
@@ -483,28 +526,65 @@ public sealed partial class SkkmConnector
         };
     }
 
-    private static int? OptionalInt(JsonElement e, string name)
-        => e.Get(name).ValueKind == JsonValueKind.Number ? e.Int(name) : null;
-
-    private static bool? OptionalBool(JsonElement e, string name)
+    /// <summary>Номер товарной группы. Не целое число — 0.</summary>
+    private static int GroupId(JsonElement item)
     {
-        var value = e.Get(name);
-        return value.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null,
-        };
+        if (int.TryParse(item.Text(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+            return id;
+        return 0;
     }
 
+    /// <summary>Число из ответа. Нет поля или не число — null.</summary>
+    private static int? OptionalInt(JsonElement e, string name)
+    {
+        if (e.Get(name).ValueKind == JsonValueKind.Number)
+            return e.Int(name);
+        return null;
+    }
+
+    /// <summary>Логическое из ответа. Нет поля или не true / false — null.</summary>
+    private static bool? OptionalBool(JsonElement e, string name)
+    {
+        var kind = e.Get(name).ValueKind;
+        if (kind == JsonValueKind.True)
+            return true;
+        if (kind == JsonValueKind.False)
+            return false;
+        return null;
+    }
+
+    /// <summary>Объект или массив — JSON как есть, остальное — текстом.</summary>
     private static string Raw(JsonElement e, string name)
     {
         var value = e.Get(name);
-        return value.ValueKind is JsonValueKind.Object or JsonValueKind.Array ? value.GetRawText() : value.Text();
+        if (value.ValueKind == JsonValueKind.Object || value.ValueKind == JsonValueKind.Array)
+            return value.GetRawText();
+        return value.Text();
     }
 
     private static ReportValue QueueRow(string key, string value, string description)
         => new() { Key = key, Value = value, Description = description };
+
+    /// <summary>
+    /// Список чеков: строка «Чек N», затем поля чека.
+    /// </summary>
+    private void ReadCheckList(JsonElement r)
+    {
+        var rows = new List<ReportValue>();
+        var number = 1;
+        foreach (var check in r.Items())
+        {
+            rows.Add(new ReportValue { Key = $"Чек {number++}" });
+            foreach (var field in check.EnumerateObject())
+                rows.Add(new ReportValue
+                {
+                    Key = field.Name,
+                    Value = EnumText(field.Name, field.Value),
+                    Description = ReportFieldDescriptions.ForKey(field.Name),
+                });
+        }
+        ReportValues = rows;
+    }
 
     /// <summary>
     /// Таблица ReportValues: поле Result, развёрнутое в строки «ключ — значение»
@@ -512,26 +592,46 @@ public sealed partial class SkkmConnector
     private static List<ReportValue> ToReportValues(JsonElement result)
     {
         var rows = new List<ReportValue>();
-        void Add(string key, JsonElement value)
-        {
-            string Child(string part) => key.Length == 0 ? part : $"{key} {part}";
-            if (value.ValueKind == JsonValueKind.Object)
-                foreach (var property in value.EnumerateObject())
-                    Add(Child(property.Name), property.Value);
-            else if (value.ValueKind == JsonValueKind.Array)
-            {
-                var index = 0;
-                foreach (var item in value.EnumerateArray())
-                    Add(Child($"[{index++}]"), item);
-            }
-            else if (key.Length > 0)
-                rows.Add(new ReportValue { Key = key, Value = EnumText(key, value) });
-        }
-        Add("", result);
+        AddReportValues(rows, "", result);
         return rows;
     }
 
-    // Имя поля JSON (последний сегмент ключа ReportValues) → перечисление коннектора.
+    /// <summary>
+    /// Значение — строкой с ключом; объект и массив — их поля, ключ дополняется: «DeviceInfo Model», «Positions [0] Name».
+    /// </summary>
+    private static void AddReportValues(List<ReportValue> rows, string key, JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+                AddReportValues(rows, ChildKey(key, property.Name), property.Value);
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+        {
+            var index = 0;
+            foreach (var item in value.EnumerateArray())
+            {
+                AddReportValues(rows, ChildKey(key, $"[{index}]"), item);
+                index++;
+            }
+        }
+        else if (key.Length > 0)
+        {
+            rows.Add(new ReportValue
+            {
+                Key = key,
+                Value = EnumText(key, value),
+                Description = ReportFieldDescriptions.ForKey(key),
+            });
+        }
+    }
+
+    private static string ChildKey(string key, string part) => key.Length == 0 ? part : $"{key} {part}";
+
+    /// <summary>Последняя часть ключа ReportValues: у «DeviceInfo Model» — «Model».</summary>
+    internal static string LastKeyPart(string key) => key[(key.LastIndexOf(' ') + 1)..];
+
+    // Имя поля JSON (последний сегмент ключа ReportValues) и перечисление коннектора.
     private static readonly Dictionary<string, Type> ReportEnums = new(StringComparer.OrdinalIgnoreCase)
     {
         ["ShiftState"] = typeof(ShiftState),
@@ -551,19 +651,23 @@ public sealed partial class SkkmConnector
         ["AgentSign"] = typeof(AgentType),
         ["SignSubjectCalculationAgent"] = typeof(AgentType),
         ["TaxVariant"] = typeof(TaxSystem),
+        ["TaxType"] = typeof(TaxSystem),
         ["lineStyle"] = typeof(LineStyle),
     };
 
-    /// <summary>Число известного перечисления — его имя (2 у ShiftState → Opened). Остальное — как в JSON.</summary>
+    /// <summary>Число известного перечисления — его имя (у ShiftState значение 2 даёт Opened). Остальное — как в JSON.</summary>
     private static string EnumText(string key, JsonElement value)
     {
         var text = value.Text();
         if (value.ValueKind != JsonValueKind.Number)
             return text;
-        var name = key[(key.LastIndexOf(' ') + 1)..];
-        if (!ReportEnums.TryGetValue(name, out var type) || !int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+        if (!ReportEnums.TryGetValue(LastKeyPart(key), out var type))
             return text;
-        return Enum.IsDefined(type, number) ? Enum.GetName(type, number) ?? text : text;
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+            return text;
+        if (!Enum.IsDefined(type, number))
+            return text;
+        return Enum.GetName(type, number) ?? text;
     }
 }
 
@@ -574,18 +678,24 @@ internal static class JsonRead
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    /// <summary>Вложенное поле по имени без учёта регистра; нет поля — пустой элемент.</summary>
+    /// <summary>Вложенное поле по имени без учёта регистра. Нет поля — пустой элемент.</summary>
     public static JsonElement Get(this JsonElement e, string name)
     {
-        if (e.ValueKind == JsonValueKind.Object)
-            foreach (var property in e.EnumerateObject())
-                if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
-                    return property.Value;
+        if (e.ValueKind != JsonValueKind.Object)
+            return default;
+        // Обычно имя совпадает точно: такой поиск не создаёт строк для имён полей.
+        if (e.TryGetProperty(name, out var exact))
+            return exact;
+        foreach (var property in e.EnumerateObject())
+            if (property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                return property.Value;
         return default;
     }
 
-    public static bool Exists(this JsonElement e) => e.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.Null);
+    /// <summary>Поле есть в ответе и не равно null.</summary>
+    public static bool Exists(this JsonElement e) => e.ValueKind != JsonValueKind.Undefined && e.ValueKind != JsonValueKind.Null;
 
+    /// <summary>Элементы массива. Не массив — пустой список.</summary>
     public static IEnumerable<JsonElement> Items(this JsonElement e)
         => e.ValueKind == JsonValueKind.Array ? e.EnumerateArray() : [];
 
@@ -599,24 +709,59 @@ internal static class JsonRead
         _ => "",
     };
 
+    /// <summary>Строка из ответа. Нет поля — пустая строка.</summary>
     public static string Str(this JsonElement e, string name) => e.Get(name).Text();
 
+    /// <summary>Число из ответа. Нет поля или не число — 0.</summary>
     public static decimal Dec(this JsonElement e, string name)
-        => decimal.TryParse(e.Str(name), NumberStyles.Float, Inv, out var value) ? value : 0;
+    {
+        var field = e.Get(name);
+        // Число читается сразу, без промежуточной строки. Строку с числом ("12.5") разбираем как текст.
+        if (field.ValueKind == JsonValueKind.Number && field.TryGetDecimal(out var number))
+            return number;
+        return decimal.TryParse(field.Text(), NumberStyles.Float, Inv, out var value) ? value : 0;
+    }
 
     public static int Int(this JsonElement e, string name) => (int)e.Dec(name);
 
     public static long Long(this JsonElement e, string name) => (long)e.Dec(name);
 
+    /// <summary>Логическое из ответа. Нет поля — false.</summary>
     public static bool Bool(this JsonElement e, string name) => e.Get(name).ValueKind == JsonValueKind.True;
 
-    /// <summary>Дата из ответа: ISO ("2026-10-29T10:29:11") или "yyyyMMddHHmmss".</summary>
-    public static System.DateTime Date(this JsonElement e, string name)
-        => System.DateTime.TryParse(e.Str(name), Inv, DateTimeStyles.None, out var value)
-            || System.DateTime.TryParseExact(e.Str(name), "yyyyMMddHHmmss", Inv, DateTimeStyles.None, out value) ? value : default;
+    /// <summary>Дата из ответа: ISO ("2026-10-29T10:29:11") или "yyyyMMddHHmmss". Не дата — пустая дата.</summary>
+    public static DateTime Date(this JsonElement e, string name)
+    {
+        var text = e.Str(name);
+        if (DateTime.TryParse(text, Inv, DateTimeStyles.None, out var date))
+            return date;
+        if (DateTime.TryParseExact(text, "yyyyMMddHHmmss", Inv, DateTimeStyles.None, out date))
+            return date;
+        return default;
+    }
 
-    public static System.DateTime? DateOrNull(this JsonElement e, string name) => e.Get(name).Exists() ? e.Date(name) : null;
+    /// <summary>Дата из ответа. Нет поля — null.</summary>
+    public static DateTime? DateOrNull(this JsonElement e, string name) => e.Get(name).Exists() ? e.Date(name) : null;
 
+    /// <summary>Перечисление по числу из ответа. Нет поля или не число — null.</summary>
     public static T? Enum<T>(this JsonElement e, string name) where T : struct, System.Enum
-        => int.TryParse(e.Str(name), NumberStyles.Integer, Inv, out var value) ? (T)System.Enum.ToObject(typeof(T), value) : null;
+    {
+        if (!int.TryParse(e.Str(name), NumberStyles.Integer, Inv, out var number))
+            return null;
+        return (T)System.Enum.ToObject(typeof(T), number);
+    }
+
+    /// <summary>Строка из ответа. Нет поля или она пустая — <paramref name="current"/>.</summary>
+    public static string StrOr(this JsonElement e, string name, string current)
+    {
+        var value = e.Str(name);
+        return value != "" ? value : current;
+    }
+
+    /// <summary>Число из ответа. Нет поля или оно не больше нуля — <paramref name="current"/>.</summary>
+    public static int IntOr(this JsonElement e, string name, int current)
+    {
+        var value = e.Int(name);
+        return value > 0 ? value : current;
+    }
 }

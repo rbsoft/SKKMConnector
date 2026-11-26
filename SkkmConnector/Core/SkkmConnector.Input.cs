@@ -2,22 +2,21 @@ namespace RBSoftSkkm;
 
 public sealed partial class SkkmConnector
 {
+    /// <summary>
+    /// Начало периода отбора. Не задано (default) — параметр from в список не уходит.
+    /// </summary>
+    public System.DateTime FromDate { get; set; }
 
     /// <summary>
-    /// Начало периода отбора отчётов, чеков и операций
+    /// Конец периода отбора. Не задано (default) — параметр to в список не уходит.
     /// </summary>
-    public System.DateTime FromDate { get; set; } = System.DateTime.Today.AddDays(-7);
-
-    /// <summary>
-    /// Конец периода отбора отчётов, чеков и операций
-    /// </summary>
-    public System.DateTime ToDate { get; set; } = System.DateTime.Today;
+    public System.DateTime ToDate { get; set; }
 
     // Наличные
 
     /// <summary>
     /// Сумма внесения/выемки. Вход и выход: после CashIn, CashOut, GetCashIn, GetCashOut —
-    /// фактическая сумма операции из ответа (поле Sum), после GetOverAll — наличные в денежном ящике.
+    /// фактическая сумма операции из ответа (поле Sum), после GetOverall — наличные в денежном ящике.
     /// </summary>
     public decimal CashAmount { get; set; }
 
@@ -217,7 +216,7 @@ public sealed partial class SkkmConnector
     /// Электронная почта покупателя
     /// </summary>
     public string? CustomerEmail { get; set; }
-    
+
     /// <summary>
     /// Номер телефона покупателя
     /// </summary>
@@ -226,13 +225,13 @@ public sealed partial class SkkmConnector
     /// <summary>
     /// Дата рождения покупателя (клиента) в формате "DD.MM.YYYY"
     /// </summary>
-    public string? CustomerDateOfBirth {  get; set; }
+    public string? CustomerDateOfBirth { get; set; }
 
     /// <summary>
     /// Числовой код страны, гражданином которой является покупатель (клиент).
     /// Код страны указывается в соответствии с Общероссийским классификатором стран мира ОКСМ.
     /// </summary>
-    public string? CustomerCitizenship { get; set;  }
+    public string? CustomerCitizenship { get; set; }
 
     /// <summary>
     /// Числовой код вида документа, удостоверяющего личность (ФФД, Таблица 116)
@@ -601,6 +600,9 @@ public sealed partial class SkkmConnector
 
         ShiftNumber = 0;
         CheckNumber = 0;
+        FromDate = default;
+        ToDate = default;
+        IsProcessed = null;
         FiscalDatetime = default;
         ErrorCode = 0;
         ErrorDescription = "";
@@ -626,5 +628,4 @@ public sealed partial class SkkmConnector
         if (cashierVatin.Length > 0)
             CashierVatin = cashierVatin;
     }
-
 }

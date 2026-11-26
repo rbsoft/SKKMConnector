@@ -36,7 +36,7 @@ namespace RBSoftSkkm
     /// Fiscalization - Фискализация
     /// </para>
     /// <para>
-    /// OpenShift - Чек коррекции прихода
+    /// OpenShift - Открытие смены
     /// </para>
     /// <para>
     /// CloseShift - Z-отчёт

@@ -127,14 +127,14 @@ else
 dotnet pack SkkmConnector\SkkmConnector.csproj -c Release -o nupkg
 ```
 
-В `nupkg/` появится файл вида `SkkmConnector.1.34.21.nupkg`. Версию задаёт `Version` в `SkkmConnector.csproj`.
+В `nupkg/` появится файл вида `SkkmConnector.1.34.26.nupkg`. Версию задаёт `Version` в `SkkmConnector.csproj`.
 
 ### Подключить NuGet-пакет
 
 Из каталога вашего приложения, рядом с папкой `nupkg`:
 
 ```powershell
-dotnet add package SkkmConnector --version 1.34.21 --source ".\nupkg"
+dotnet add package SkkmConnector --version 1.34.26 --source ".\nupkg"
 ```
 
 Либо один раз прописать источник в `nuget.config` рядом с `.csproj` или `.sln`:
@@ -151,7 +151,7 @@ dotnet add package SkkmConnector --version 1.34.21 --source ".\nupkg"
 После этого в проекте достаточно:
 
 ```xml
-<PackageReference Include="SkkmConnector" Version="1.34.21" />
+<PackageReference Include="SkkmConnector" Version="1.34.26" />
 ```
 
 ```powershell

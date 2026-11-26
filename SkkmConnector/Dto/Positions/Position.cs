@@ -302,5 +302,4 @@ public sealed class Position
     /// Выравнивание картинки.
     /// </summary>
     public PictureAlignment PictureAlignment { get; set; } = PictureAlignment.Center;
-
 }

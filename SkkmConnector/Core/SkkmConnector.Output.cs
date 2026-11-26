@@ -19,14 +19,13 @@ public sealed partial class SkkmConnector
     // ── Таблицы ──
 
     /// <summary>
-    /// Таблица «ключ — значение»: поле Result, развёрнутое в строки.
-    /// Ключ: индекс массива в квадратных скобках, части через пробел — <c>[0] TrustedInFn</c>
+    /// Таблица «ключ — значение — описание»: поле Result ответа, развёрнутое в строки.
     /// </summary>
     public IReadOnlyList<ReportValue> ReportValues { get; private set; } = [];
 
     /// <summary>
     /// Счётчики по типам операций
-    /// после <see cref="GetTotals"/> и отчётов о смене — за смену, после <see cref="GetOverAll"/> — необнуляемые.
+    /// после <see cref="GetTotals"/> и отчётов о смене — за смену, после <see cref="GetOverall"/> — необнуляемые.
     /// Строка есть только для операции, которую прислал сервер.
     /// </summary>
     public IReadOnlyList<Counter> Counter { get; private set; } = [];
@@ -94,7 +93,7 @@ public sealed partial class SkkmConnector
     /// <summary>Остаток наличных в денежном ящике.</summary>
     public decimal CashBalance { get; private set; }
 
-    /// <summary>Необнуляемая сумма продаж — GetOverAll.</summary>
+    /// <summary>Необнуляемая сумма продаж — GetOverall.</summary>
     public decimal NonZeroSum { get; private set; }
 
     /// <summary>Сумма внесений за смену.</summary>
@@ -112,8 +111,11 @@ public sealed partial class SkkmConnector
     /// <summary>Номер денежного ящика.</summary>
     public int DrawerNumber { get; private set; }
 
-    /// <summary>Документ обработан успешно.</summary>
-    public bool IsProcessed { get; private set; }
+    /// <summary>
+    /// Признак обработки. Вход списков: null — параметр isProcessed не уходит,
+    /// true / false — фильтр. Выход документа: признак успешной обработки из ответа.
+    /// </summary>
+    public bool? IsProcessed { get; set; }
 
     /// <summary>Версия ФФД документа.</summary>
     public string FnFFDVersion { get; private set; } = "";
@@ -319,9 +321,6 @@ public sealed partial class SkkmConnector
     /// <summary>Результат проверки кода маркировки фискальным накопителем положительный.</summary>
     public bool CheckingResult { get; private set; }
 
-    /// <summary>Штрихкод после приведения к виду со спецсимволами GS.</summary>
-    public string MarkingBarcode { get; private set; } = "";
-
     /// <summary>Итог проверки кода маркировки в ОИСМ (поле Result).</summary>
     public bool KmResult { get; private set; }
 
@@ -376,14 +375,17 @@ public sealed partial class SkkmConnector
     /// <summary>Результаты проверки по каждому коду.</summary>
     public IReadOnlyList<CodeMarkInfo> MarkingCodes { get; private set; } = [];
 
-    // Выходные свойства — все свойства с private set и DocId, ShiftNumber, CheckNumber, CashAmount (вход и выход).
-    // Перед разбором каждого ответа все они сбрасываются — новое свойство с private set попадает сюда само.
+    // Свойства, которые одновременно вход и выход: их тоже сбрасывает каждый ответ.
+    private static readonly string[] InOutProperties =
+        [nameof(DocId), nameof(ShiftNumber), nameof(CheckNumber), nameof(CashAmount), nameof(IsProcessed)];
+
+    // Выходные свойства: все с private set и вход-выход. Новое свойство с private set попадает сюда само.
     private static readonly PropertyInfo[] ResponseProperties = typeof(SkkmConnector).GetProperties()
-        .Where(p => p.Name is nameof(DocId) or nameof(ShiftNumber) or nameof(CheckNumber) or nameof(CashAmount) || p.SetMethod is { IsPrivate: true })
+        .Where(p => InOutProperties.Contains(p.Name) || p.SetMethod?.IsPrivate == true)
         .ToArray();
 
     /// <summary>
-    /// Сброс выходных свойств
+    /// Сброс выходных свойств перед разбором ответа: строки — "", списки — пустые, остальное — значение по умолчанию.
     /// </summary>
     private void ResetResponse()
     {

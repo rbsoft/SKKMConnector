@@ -12,7 +12,7 @@ namespace RBSoftSkkm
 
         /// <summary>
         /// Значение поля строкой: логическое — <c>True</c> или <c>False</c>, число — как в ответе,
-        /// известное перечисление — именем элемента (<c>ShiftState</c> 2 → <c>Opened</c>), пустое (null) — пустая строка.
+        /// известное перечисление — именем элемента (<c>ShiftState</c> со значением 2 даёт <c>Opened</c>), пустое (null) — пустая строка.
         /// </summary>
         public string Value { get; init; } = "";
 

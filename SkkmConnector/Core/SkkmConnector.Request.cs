@@ -64,19 +64,25 @@ public sealed partial class SkkmConnector
         ("AdditionalAttribute", NullIfEmpty(AdditionalAttribute)),
         ("CorrectionData", CorrectionJson()),
         ("Payments", PaymentsJson()),
-        // Не задана — 0. Это значение, а не пропущенный тег.
-        ("SumTaxNone", SumTaxNone ?? 0m), ("SumTax0", SumTax0 ?? 0m), ("SumTax5", SumTax5 ?? 0m), ("SumTax7", SumTax7 ?? 0m),
-        ("SumTax10", SumTax10 ?? 0m), ("SumTax18", SumTax18 ?? 0m), ("SumTax20", SumTax20 ?? 0m), ("SumTax22", SumTax22 ?? 0m),
-        ("SumTax105", SumTax105 ?? 0m), ("SumTax107", SumTax107 ?? 0m), ("SumTax110", SumTax110 ?? 0m),
-        ("SumTax118", SumTax118 ?? 0m), ("SumTax120", SumTax120 ?? 0m), ("SumTax122", SumTax122 ?? 0m));
+        // Как в 1С: незаданные SumTax… в JSON не входят.
+        ("SumTaxNone", SumTaxNone), ("SumTax0", SumTax0), ("SumTax5", SumTax5), ("SumTax7", SumTax7),
+        ("SumTax10", SumTax10), ("SumTax18", SumTax18), ("SumTax20", SumTax20), ("SumTax22", SumTax22),
+        ("SumTax105", SumTax105), ("SumTax107", SumTax107), ("SumTax110", SumTax110),
+        ("SumTax118", SumTax118), ("SumTax120", SumTax120), ("SumTax122", SumTax122));
 
     /// <summary>
     /// Слип (POST slip): сначала многострочный Text, затем нефискальные строки Positions. Кассир не передаётся.
     /// </summary>
     private JsonObject SlipBody()
     {
-        var lines = Text.Length == 0 ? [] : Text.Replace("\r\n", "\n").Split('\n').Select(line => TextLine(line, null, null));
-        return Obj(("DeviceName", DeviceName), ("Positions", new JsonArray(lines.Concat(Positions.Where(row => !row.FiscalString).Select(LineJson)).ToArray())));
+        var lines = new JsonArray();
+        if (Text.Length > 0)
+            foreach (var line in Text.Replace("\r\n", "\n").Split('\n'))
+                lines.Add(TextLine(line, null, null));
+        foreach (var row in Positions)
+            if (!row.FiscalString)
+                lines.Add(LineJson(row));
+        return Obj(("DeviceName", DeviceName), ("Positions", lines));
     }
 
     /// <summary>
@@ -130,13 +136,18 @@ public sealed partial class SkkmConnector
     /// у способа оплаты 0 — это предоплата 100%, а не «не задано».
     /// </summary>
     private JsonArray? ElectronicPaymentInfo()
-        => _electronicPayments.Count == 0 ? null : new JsonArray(_electronicPayments
-            .Select(p => (JsonNode)Obj(
+    {
+        if (_electronicPayments.Count == 0)
+            return null;
+        var list = new JsonArray();
+        foreach (var p in _electronicPayments)
+            list.Add(Obj(
                 ("Amount", p.Amount),
-                ("PaymentMethod", p.Method is { } method ? (int)method : null),
+                ("PaymentMethod", (int?)p.Method),
                 ("Identifiers", NullIfEmpty(p.Identifiers)),
-                ("AdditionalInformation", NullIfEmpty(p.Information))))
-            .ToArray());
+                ("AdditionalInformation", NullIfEmpty(p.Information))));
+        return list;
+    }
 
     /// <summary>
     /// Строка чека; текст фискальной строки печатается отдельной строкой после неё.
@@ -202,7 +213,7 @@ public sealed partial class SkkmConnector
             ? Obj(("Numerator", row.FractionalQuantityNumerator), ("Denominator", row.FractionalQuantityDenominator)) : null),
         // Данные кода товара: Cis — в Barcode как есть, Cis_Base64 — в MarkingCode.
         ("GoodCodeData", Group(
-            ("Gtin", NullIfEmpty(row.GTIN)), ("SerialNumber", NullIfEmpty(row.SerialNumber)),
+            ("GTIN", NullIfEmpty(row.GTIN)), ("SerialNumber", NullIfEmpty(row.SerialNumber)),
             ("CommodityGroup", NullIfEmpty(row.CommodityGroup)), ("Barcode", NullIfEmpty(row.Cis)),
             ("MarkingCode", NullIfEmpty(row.Cis_Base64)), ("StampType", NullIfEmpty(row.StampType)))),
         ("IndustryAttribute", string.IsNullOrEmpty(row.IndustryAttributeIdentifierFoiv) ? null : Obj(
@@ -224,8 +235,10 @@ public sealed partial class SkkmConnector
     /// Строка в Base64: есть латинская буква и строка декодируется.
     /// </summary>
     private static bool IsBase64(string value)
-        => value.Any(ch => ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z')
-           && Convert.TryFromBase64String(value, new byte[value.Length], out _);
+    {
+        var hasLatinLetter = value.Any(ch => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
+        return hasLatinLetter && Convert.TryFromBase64String(value, new byte[value.Length], out _);
+    }
 
     /// <summary>
     /// Строка текста с разметкой в начале: [center], [big], [QR], [line], [line,dotted], [dotted] —
@@ -243,6 +256,7 @@ public sealed partial class SkkmConnector
             var tags = line[1..close].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             hasLineTag = tags.Any(tag => tag.Equals("line", StringComparison.OrdinalIgnoreCase));
             var recognized = hasLineTag;
+            // Enum.TryParse принимает и числа: тег [1] не должен стать шрифтом или стилем линии.
             foreach (var tag in tags.Where(tag => !char.IsDigit(tag[0])))
             {
                 // [bold] — шрифт; линия жирная, только вместе с [line].
@@ -273,7 +287,7 @@ public sealed partial class SkkmConnector
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>Пустой массив телефона не передаётся.</summary>
-    private static string[]? EmptyArrayAsNull(string[]? values) => values is { Length: > 0 } ? values : null;
+    private static string[]? EmptyArrayAsNull(string[]? values) => values != null && values.Length > 0 ? values : null;
 
     /// <summary>
     /// JSON-объект из пар «имя — значение»; null пропускается.
@@ -293,5 +307,24 @@ public sealed partial class SkkmConnector
     /// Если блок есть, пустые строки внутри него остаются: это пустое значение, а не пропущенное поле.
     /// </summary>
     private static JsonObject? Group(params (string Name, object? Value)[] fields)
-        => fields.All(f => f.Value is null or "" or 0m || f.Value is Array { Length: 0 }) ? null : Obj(fields);
+    {
+        foreach (var field in fields)
+            if (!IsEmpty(field.Value))
+                return Obj(fields);
+        return null;
+    }
+
+    /// <summary>Не заполнено: null, пустая строка, сумма 0 или пустой массив.</summary>
+    private static bool IsEmpty(object? value)
+    {
+        if (value == null)
+            return true;
+        if (value is string text)
+            return text == "";
+        if (value is decimal number)
+            return number == 0;
+        if (value is Array array)
+            return array.Length == 0;
+        return false;
+    }
 }

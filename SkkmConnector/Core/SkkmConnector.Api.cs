@@ -26,8 +26,18 @@ public sealed partial class SkkmConnector
         }).ToArray());
 
     /// <summary>Список касс в пуле (сервер возвращает имена касс).</summary>
-    public Task<bool> GetDeviceListByPool() => Call(HttpMethod.Get, $"kkt/list/byPool?pool={Uri.EscapeDataString(Pool)}", null, r =>
-        DeviceList = r.Items().Select(name => new DeviceListResponse { DeviceName = name.Text() }).ToArray());
+    public async Task<bool> GetDeviceListByPool()
+    {
+        var ok = await Call(HttpMethod.Get, $"kkt/list/byPool?pool={Uri.EscapeDataString(Pool)}", null, r =>
+            DeviceList = r.Items().Select(name => new DeviceListResponse { DeviceName = name.Text() }).ToArray());
+        if (ok && DeviceList.Length == 0)
+        {
+            ErrorCode = 400;
+            ErrorDescription = "Пул пустой, либо нет такого пула!";
+            return false;
+        }
+        return ok;
+    }
 
     /// <summary>Получение подробной информации об устройстве ККТ.</summary>
     public Task<bool> GetKktInfo() => Call(HttpMethod.Get, $"kkt?{DeviceQuery}", null, ReadKktInfo);
@@ -55,43 +65,42 @@ public sealed partial class SkkmConnector
     public Task<bool> GetTotals() => Call(HttpMethod.Get, $"kkt/counters/shift?{DeviceQuery}", null, r =>
     {
         ReadShiftTotal(r);
-        if (r.Int("ShiftNumber") > 0)
-            ShiftNumber = r.Int("ShiftNumber");
+        ShiftNumber = r.IntOr("ShiftNumber", ShiftNumber);
         if (r.Get("CashDrawer").Exists())
             CashBalance = r.Get("CashDrawer").Dec("Sum");
     });
 
     /// <summary>Получение необнуляемых (накопительных) счётчиков ККТ.</summary>
-    public Task<bool> GetOverAll() => Call(HttpMethod.Get, $"kkt/counters/overall?{DeviceQuery}", null, r =>
+    public Task<bool> GetOverall() => Call(HttpMethod.Get, $"kkt/counters/overall?{DeviceQuery}", null, r =>
     {
         Counter = ReadCounters(r.Get("Counters"));
         NonZeroSum = r.Get("Counters").Get("Sales").Dec("Sum");
         if (r.Get("CashDrawer").Exists())
-            CashAmount = r.Get("CashDrawer").Dec("Sum"); // наличные в ящике после GetOverAll — в CashAmount
+            CashAmount = r.Get("CashDrawer").Dec("Sum"); // наличные в ящике после GetOverall — в CashAmount
     });
 
     // ── Смена и отчёты ──
 
     /// <summary>Открытие кассовой смены.</summary>
-    public Task<bool> OpenShift() => Call(HttpMethod.Post, "shift/open", CheckBase(), ReadShiftResult);
+    public Task<bool> OpenShift() => Call(HttpMethod.Post, "shift/open", CheckBase(), ReadOpenShift);
 
     /// <summary>Асинхронное открытие смены.</summary>
     public Task<bool> OpenShiftAsync() => PostTask("shift/open/async", CheckBase());
 
     /// <summary>Закрытие кассовой смены (Z-отчёт).</summary>
-    public Task<bool> CloseShift() => Call(HttpMethod.Post, "shift/z", CheckBase(), ReadShiftResult);
+    public Task<bool> CloseShift() => Call(HttpMethod.Post, "shift/z", CheckBase(), ReadCloseShift);
 
     /// <summary>Асинхронное закрытие смены.</summary>
     public Task<bool> CloseShiftAsync() => PostTask("shift/z/async", CheckBase());
 
     /// <summary>Формирование X-отчёта (без закрытия смены).</summary>
-    public Task<bool> ReportX() => Call(HttpMethod.Post, "shift/x", CheckBase(), ReadShiftResult);
+    public Task<bool> ReportX() => Call(HttpMethod.Post, "shift/x", CheckBase(), ReadReport);
 
     /// <summary>Асинхронный X-отчёт.</summary>
     public Task<bool> ReportXAsync() => PostTask("shift/x/async", CheckBase());
 
     /// <summary>Формирование отчёта о текущем состоянии расчётов.</summary>
-    public Task<bool> ReportSettlement() => Call(HttpMethod.Post, "report/settlement", CheckBase(), ReadShiftResult);
+    public Task<bool> ReportSettlement() => Call(HttpMethod.Post, "report/settlement", CheckBase(), ReadReport);
 
     /// <summary>Асинхронный отчёт о состоянии расчётов.</summary>
     public Task<bool> ReportSettlementAsync() => PostTask("report/settlement/async", CheckBase());
@@ -108,16 +117,16 @@ public sealed partial class SkkmConnector
     /// <summary>Возвращает отчёт о состоянии расчётов по идентификатору документа (docId).</summary>
     public Task<bool> GetReportSettlementResult() => GetDocument("report/settlement");
 
-    /// <summary>Получение списка открытий смен за период.</summary>
+    /// <summary>Список открытий смен. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
     public Task<bool> GetOpenShiftList() => GetReportList("shift/open/list");
 
-    /// <summary>Получение списка Z-отчётов за период.</summary>
+    /// <summary>Список Z-отчётов. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
     public Task<bool> GetCloseShiftList() => GetReportList("shift/z/list");
 
-    /// <summary>Получение списка X-отчётов за период.</summary>
+    /// <summary>Список X-отчётов. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
     public Task<bool> GetReportXList() => GetReportList("shift/x/list");
 
-    /// <summary>Список отчётов о состоянии расчётов по устройству за период.</summary>
+    /// <summary>Список отчётов о состоянии расчётов. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
     public Task<bool> GetReportSettlementList() => GetReportList("report/settlement/list");
 
     // ── Чеки ──
@@ -131,8 +140,8 @@ public sealed partial class SkkmConnector
     /// <summary>Возвращает результат операции по идентификатору документа (docId).</summary>
     public Task<bool> GetCheck() => GetDocument("check");
 
-    /// <summary>Список чеков за период и смену. Номер смены — ShiftNumber, период — FromDate / ToDate.</summary>
-    public Task<bool> GetCheckList() => GetDocumentList($"check/list?{DeviceQuery}&{DateQuery(FromDate, ToDate)}&shift={ShiftNumber}");
+    /// <summary>Список чеков. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
+    public Task<bool> GetCheckList() => GetReportList("check/list", ReadCheckList);
 
     /// <summary>Получение фискального признака (ФП) по номеру фискального документа (ФД).</summary>
     public Task<bool> GetFiscalSign() => Call(HttpMethod.Get, $"check/fiscalSign?docNumber={CheckNumber}&{DeviceQuery}", null, r =>
@@ -164,14 +173,14 @@ public sealed partial class SkkmConnector
     /// <summary>Возвращает чек коррекции ФФД 1.2 по идентификатору документа (docId).</summary>
     public Task<bool> GetCorrection120() => GetDocument("correction120");
 
-    /// <summary>Получение списка чеков коррекции ФФД 1.2.</summary>
-    public Task<bool> GetCorrection120List() => GetDocumentList($"correction120/list?{DeviceQuery}");
+    /// <summary>Список чеков коррекции ФФД 1.2. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
+    public Task<bool> GetCorrection120List() => GetReportList("correction120/list", ReadCheckList);
 
     /// <summary>Возвращает чек коррекции ФФД 1.0.5 по идентификатору документа (docId).</summary>
     public Task<bool> GetCorrection105() => GetDocument("correction105");
 
-    /// <summary>Получение списка чеков коррекции ФФД 1.0.5.</summary>
-    public Task<bool> GetCorrection105List() => GetDocumentList($"correction105/list?{DeviceQuery}");
+    /// <summary>Список чеков коррекции ФФД 1.0.5. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
+    public Task<bool> GetCorrection105List() => GetReportList("correction105/list", ReadCheckList);
 
     // ── Деньги ──
 
@@ -190,11 +199,14 @@ public sealed partial class SkkmConnector
     /// <summary>Возвращает результат операции внесения наличных по идентификатору операции (docId).</summary>
     public Task<bool> GetCashIn() => GetDocument("cashin", ReadCashDocument);
 
-    /// <summary>Список операций внесения наличных по кассе.</summary>
-    public Task<bool> GetCashInList() => GetDocumentList($"cashin/list?{DeviceQuery}");
+    /// <summary>Список внесений. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
+    public Task<bool> GetCashInList() => GetReportList("cashin/list");
 
     /// <summary>Возвращает результат операции выемки наличных по идентификатору операции (docId).</summary>
     public Task<bool> GetCashOut() => GetDocument("cashout", ReadCashDocument);
+
+    /// <summary>Список выемок. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
+    public Task<bool> GetCashOutList() => GetReportList("cashout/list");
 
     /// <summary>Открытие денежного ящика.</summary>
     public Task<bool> OpenCashdrawer() => Call(HttpMethod.Post, "cash/open", CheckBase(), ReadDocument);
@@ -213,8 +225,8 @@ public sealed partial class SkkmConnector
     /// <summary>Получение слипа по идентификатору документа.</summary>
     public Task<bool> GetSlip() => GetDocument("slip");
 
-    /// <summary>Список слипов по кассе.</summary>
-    public Task<bool> GetSlipList() => GetDocumentList($"slip/list?{DeviceQuery}");
+    /// <summary>Список слипов. Обязателен DeviceName; FromDate/ToDate/ShiftNumber/IsProcessed — по желанию.</summary>
+    public Task<bool> GetSlipList() => GetReportList("slip/list");
 
     // ── Маркировка ──
 
@@ -266,14 +278,13 @@ public sealed partial class SkkmConnector
         ReadHeader(r.Get("DocumentHeader"));
         DeviceSerialNumber = r.Get("DocumentHeader").Str("SerialNumber");
         FnSerialNumber = r.Get("DocumentHeader").Str("Fn");
-        if (r.Str("FiscalSign").Length > 0)
-            FiscalSign = r.Str("FiscalSign");
-        if (r.Int("DocNumber") > 0)
-            CheckNumber = r.Int("DocNumber");
-        if (r.Int("ShiftNumber") > 0)
-            ShiftNumber = r.Int("ShiftNumber");
-        if (r.Str("DocId").Length > 0)
-            DocId = r.Str("DocId");
+        FiscalSign = r.StrOr("FiscalSign", FiscalSign);
+        CheckNumber = r.IntOr("DocNumber", CheckNumber);
+        ShiftNumber = r.IntOr("ShiftNumber", ShiftNumber);
+        DocId = r.StrOr("DocId", DocId);
+        DeviceName = r.StrOr("DeviceName", DeviceName);
+        if (r.Get("DocumentHeader").Get("Cashier").Exists())
+            CashierName = r.Get("DocumentHeader").Str("Cashier");
     });
 
     /// <summary>Состояние задания в очереди. В ReportValues девять строк статуса, не весь JSON задания.</summary>

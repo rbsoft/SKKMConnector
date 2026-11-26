@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -6,7 +5,7 @@ using System.Text.Json.Nodes;
 
 namespace RBSoftSkkm;
 
-// HTTP-вызов Сервера ККМ: JSON запроса → сервер → разбор ответа в свойства.
+// HTTP-вызов Сервера ККМ: JSON запроса, ответ сервера, разбор в свойства.
 public sealed partial class SkkmConnector
 {
     private const string ApiPath = "/PrintService/api/v4/";
@@ -29,9 +28,6 @@ public sealed partial class SkkmConnector
     private string DeviceQuery => $"device={Uri.EscapeDataString(DeviceName)}";
 
     private string IdQuery => $"id={Uri.EscapeDataString(DocId)}";
-
-    private static string DateQuery(System.DateTime from, System.DateTime to)
-        => $"from={from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}&to={to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}";
 
     /// <summary>
     /// Запрос к серверу.
@@ -152,8 +148,13 @@ public sealed partial class SkkmConnector
 
         var text = System.Net.WebUtility.HtmlDecode(body[from..to]);
         var quote = text.IndexOf('"');
-        var end = quote < 0 ? -1 : text.IndexOf('"', quote + 1);
-        text = (end < 0 ? text : text[(quote + 1)..end]).Trim();
+        if (quote >= 0)
+        {
+            var end = text.IndexOf('"', quote + 1);
+            if (end >= 0)
+                text = text[(quote + 1)..end];
+        }
+        text = text.Trim();
         return text.Length > 0 ? text : null;
     }
 
@@ -177,12 +178,18 @@ public sealed partial class SkkmConnector
     {
         const int defaultPort = 4398;
         var value = address.Trim();
-        var separator = value.LastIndexOf(':');
         if (value.Length == 0)
             return ("localhost", defaultPort);
-        if (separator >= 0 && int.TryParse(value[(separator + 1)..], out var port) && port is >= 1 and <= 65535)
-            return (separator == 0 ? "localhost" : value[..separator], port);
-        return (value, defaultPort);
+
+        var separator = value.LastIndexOf(':');
+        if (separator < 0)
+            return (value, defaultPort);
+        if (!int.TryParse(value[(separator + 1)..], out var port) || port < 1 || port > 65535)
+            return (value, defaultPort);
+
+        // ":4398" — порт без хоста.
+        var host = separator == 0 ? "localhost" : value[..separator];
+        return (host, port);
     }
 
     /// <summary>
@@ -191,7 +198,7 @@ public sealed partial class SkkmConnector
     private Task<bool> PostTask(string path, JsonObject body)
         => Call(HttpMethod.Post, path, body, r =>
         {
-            if (_ok && r.Text().Length > 0)
+            if (_ok)
                 DocId = r.Text();
         });
 
@@ -202,14 +209,21 @@ public sealed partial class SkkmConnector
         => Call(HttpMethod.Get, $"{path}?{IdQuery}", null, read ?? ReadDocument);
 
     /// <summary>
-    /// GET списка отчётов за период <see cref="FromDate"/>..<see cref="ToDate"/>.
+    /// GET списка. device всегда; from, to, shift и isProcessed — только если заданы.
     /// </summary>
-    private Task<bool> GetReportList(string path)
-        => GetDocumentList($"{path}?{DeviceQuery}&{DateQuery(FromDate, ToDate)}");
-
-    /// <summary>
-    /// GET списка документов: весь Result в <see cref="ReportValues"/>.
-    /// </summary>
-    private Task<bool> GetDocumentList(string pathAndQuery)
-        => Call(HttpMethod.Get, pathAndQuery);
+    private Task<bool> GetReportList(string path, Action<JsonElement>? read = null)
+    {
+        var query = DeviceQuery;
+        if (FromDate != default)
+            query += $"&from={FromDate:yyyy-MM-dd}";
+        if (ToDate != default)
+            query += $"&to={ToDate:yyyy-MM-dd}";
+        if (ShiftNumber > 0)
+            query += $"&shift={ShiftNumber}";
+        if (IsProcessed == true)
+            query += "&isProcessed=true";
+        if (IsProcessed == false)
+            query += "&isProcessed=false";
+        return Call(HttpMethod.Get, $"{path}?{query}", null, read);
+    }
 }
